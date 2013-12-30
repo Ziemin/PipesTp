@@ -29,5 +29,3 @@ target_link_libraries(PipesTp ${TELEPATHY_QT5_SERVICE_LIBRARIES})
 
 add_executable(pipesTpService main.cpp)
 target_link_libraries(pipesTpService PipesTp)
-target_link_libraries(pipesTpService ${TELEPATHY_QT5_LIBRARIES})
-target_link_libraries(pipesTpService ${TELEPATHY_QT5_SERVICE_LIBRARIES})
