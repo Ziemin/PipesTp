@@ -1,0 +1,12 @@
+*.a
+*.tmp
+*.swp
+*.log
+moc_*.cpp
+]
+*_automoc.cpp
+cmake_install.cmake
+Makefile
+CMakeFiles
+CMakeCache.txt
+

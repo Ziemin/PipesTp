@@ -10,9 +10,9 @@ class PipeConnectionManager : public Tp::BaseConnectionManager {
 
     public:
 
-        PipeConnectionManager(const QDBusConnection& connection, const QString& name);
+        PipeConnectionManager(const QDBusConnection &connection, const QString &name);
 
-        QVariantMap immutableProperties() const override;
+        virtual QVariantMap immutableProperties() const override;
 
 };
 
