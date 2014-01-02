@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.freedesktop.Telepathy.ConnectionManager.PipesCM
+Exec=@CMAKE_INSTALL_PREFIX@/@EXEC_DIR@/pipesCM-telepathy

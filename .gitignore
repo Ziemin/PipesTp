@@ -10,3 +10,5 @@ Makefile
 CMakeFiles
 CMakeCache.txt
 pipesTpService
+*.swo
+*.service

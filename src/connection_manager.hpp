@@ -2,6 +2,8 @@
 #define PIPE_CONNECTION_MANAGER_HPP
 
 #include <TelepathyQt/BaseConnectionManager>
+#include <TelepathyQt/AccountManager>
+#include "approver.hpp"
 
 class PipeConnectionManager : public Tp::BaseConnectionManager {
 
@@ -11,9 +13,19 @@ class PipeConnectionManager : public Tp::BaseConnectionManager {
     public:
 
         PipeConnectionManager(const QDBusConnection &connection, const QString &name);
-
         virtual QVariantMap immutableProperties() const override;
 
+    private:
+        
+        void init();
+
+    private Q_SLOTS:
+
+        void onAccountManagerReady(Tp::PendingOperation *op);
+
+    private:
+
+        Tp::AccountManagerPtr amp;
 };
 
 #endif

@@ -21,11 +21,14 @@ include_directories(${TELEPATHY_QT5_INCLUDE_DIRS})
 
 add_library(PipesTp STATIC
     connection_manager.cpp
+    approver.cpp
 )
 
 qt5_use_modules(PipesTp Core DBus Xml Network)
 target_link_libraries(PipesTp ${TELEPATHY_QT5_LIBRARIES})
 target_link_libraries(PipesTp ${TELEPATHY_QT5_SERVICE_LIBRARIES})
 
-add_executable(pipesTpService main.cpp)
-target_link_libraries(pipesTpService PipesTp)
+add_executable(pipesCM-telepathy main.cpp)
+target_link_libraries(pipesCM-telepathy PipesTp)
+
+install(TARGETS pipesCM-telepathy DESTINATION ${EXEC_DIR})
