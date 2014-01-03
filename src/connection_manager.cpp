@@ -2,16 +2,38 @@
 #include <TelepathyQt/PendingOperation>
 #include <TelepathyQt/PendingReady>
 #include <QDebug>
+#include <QtDBus>
 #include <vector>
 
 #include "connection_manager.hpp"
-#include "pipe_proxy.hpp"
+#include "types.hpp"
+#include "defines.hpp"
+#include "pipe_interface.h"
 
 namespace init {
 
-    std::vector<PipePtr> discoverPipes() {
+    std::vector<PipePtr> discoverPipes(const QDBusConnection& connection) {
+
+        QDBusConnectionInterface *dci = connection.interface();
+        QDBusReply<QStringList> servicesRep = dci->registeredServiceNames();
 
         std::vector<PipePtr> pipes;
+
+        if(servicesRep.isValid()) {
+
+            QStringList pipeServices = servicesRep.value()
+                .filter(QRegExp("^" TP_QT_IFACE_PIPE ".*$"));
+
+            QString path;
+            for(auto it = pipeServices.constBegin(); it != pipeServices.constEnd(); ++it) {
+                qDebug() << "Found pipe service - > " + *it;
+                path = "/" + *it;
+                path.replace('.', '/');
+                pipes.push_back(std::make_shared<Pipe>(*it, path, connection));
+            }
+        } else {
+            qWarning() << "Could not obtain services list from dbus connection";
+        }
 
         return pipes;
     }
@@ -50,9 +72,9 @@ void PipeConnectionManager::onAccountManagerReady(Tp::PendingOperation *op) {
         return;
     }
 
-    std::vector<PipePtr> pipes = init::discoverPipes();
+    std::vector<PipePtr> pipes = init::discoverPipes(dbusConnection());
     for(auto& pipe: pipes) {
-        // create protocols and add to cm
+        // do sth
     }
 
     Tp::AccountSetPtr validAccounts = amp->validAccounts();

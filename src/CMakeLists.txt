@@ -19,10 +19,19 @@ find_library(TELEPATHY_QT5_SERVICE_LIBRARIES telepathy-qt5-service)
 
 include_directories(${TELEPATHY_QT5_INCLUDE_DIRS})
 
-add_library(PipesTp STATIC
+
+set(pipe_xml ${PipesTp_SOURCE_DIR}/interfaces/org.freedesktop.Telepathy.Pipe.xml)
+message(${pipe_xml})
+
+set(PipesTp_SRCS 
     connection_manager.cpp
     approver.cpp
+    #protocol.cpp
 )
+
+qt5_add_dbus_interface(PipesTp_SRCS ${pipe_xml} pipe_interface)
+
+add_library(PipesTp STATIC ${PipesTp_SRCS})
 
 qt5_use_modules(PipesTp Core DBus Xml Network)
 target_link_libraries(PipesTp ${TELEPATHY_QT5_LIBRARIES})

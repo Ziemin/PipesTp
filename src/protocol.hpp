@@ -2,8 +2,9 @@
 #define PIPE_PROTOCOL_HPP
 
 #include <TelepathyQt/BaseProtocol>
-#include "pipe_proxy.hpp"
 #include "connection.hpp"
+#include "types.hpp"
+
 
 class PipeProtocol : public Tp::BaseProtocol {
 

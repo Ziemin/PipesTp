@@ -12,3 +12,7 @@ CMakeCache.txt
 pipesTpService
 *.swo
 *.service
+*.moc
+PipeInterface.*
+*.moc_parameters
+pipe_interface.*
