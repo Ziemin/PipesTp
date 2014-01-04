@@ -3,7 +3,7 @@ find_package(Qt5DBus REQUIRED)
 find_package(Qt5Xml REQUIRED)
 find_package(Qt5Network REQUIRED)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS} -include qdbus_gen_includes.hpp")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -19,14 +19,13 @@ find_library(TELEPATHY_QT5_SERVICE_LIBRARIES telepathy-qt5-service)
 
 include_directories(${TELEPATHY_QT5_INCLUDE_DIRS})
 
-
 set(pipe_xml ${PipesTp_SOURCE_DIR}/interfaces/org.freedesktop.Telepathy.Pipe.xml)
 message(${pipe_xml})
 
 set(PipesTp_SRCS 
     connection_manager.cpp
     approver.cpp
-    #protocol.cpp
+    protocol.cpp
 )
 
 qt5_add_dbus_interface(PipesTp_SRCS ${pipe_xml} pipe_interface)
@@ -37,7 +36,7 @@ qt5_use_modules(PipesTp Core DBus Xml Network)
 target_link_libraries(PipesTp ${TELEPATHY_QT5_LIBRARIES})
 target_link_libraries(PipesTp ${TELEPATHY_QT5_SERVICE_LIBRARIES})
 
-add_executable(pipesCM-telepathy main.cpp)
-target_link_libraries(pipesCM-telepathy PipesTp)
+add_executable(telepathy-pipes main.cpp)
+target_link_libraries(telepathy-pipes PipesTp)
 
-install(TARGETS pipesCM-telepathy DESTINATION ${EXEC_DIR})
+install(TARGETS telepathy-pipes DESTINATION lib)

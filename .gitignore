@@ -16,3 +16,5 @@ pipesTpService
 PipeInterface.*
 *.moc_parameters
 pipe_interface.*
+install_manifest.txt
+telepathy-pipes

@@ -2,7 +2,9 @@
 <node>
   <interface name="org.freedesktop.Telepathy.Pipe">
     <property name="name" type="s" access="read"/>
-    <property name="supportedChannelTypes" type="as" access="read"/>
+    <property name="RequestableChannelClasses" type="a(a{sv}as)" access="read">
+        <annotation name="org.qtproject.QtDBus.QtTypeName" value="RequestableChannelClassList"/>
+    </property>
     <method name="createPipeChannel">
       <arg type="o" direction="out"/>
       <arg name="channelObject" type="o" direction="in"/>

@@ -12,6 +12,12 @@
 #include "connection_manager.hpp"
 #include "approver.hpp"
 
+void registerPipeTypes() {
+    typedef Tp::RequestableChannelClassList RequestableChannelClassList;
+    qRegisterMetaType<RequestableChannelClassList>("RequestableChannelClassList");
+    qDBusRegisterMetaType<RequestableChannelClassList>();
+}
+
 int main(int argc, char **argv) {
 
     QCoreApplication app(argc, argv);
@@ -20,8 +26,10 @@ int main(int argc, char **argv) {
     Tp::enableDebug(true);
     Tp::enableWarnings(true);
 
+    registerPipeTypes();
+
     QDBusConnection dbusConnection = QDBusConnection::sessionBus();
-    PipeConnectionManager cm(dbusConnection, QLatin1String("PipeCM"));
+    PipeConnectionManager cm(dbusConnection, QLatin1String("pipes"));
 
     Tp::ClientRegistrarPtr registrar = Tp::ClientRegistrar::create();
     Tp::AbstractClientPtr approver = Tp::AbstractClientPtr::dynamicCast(

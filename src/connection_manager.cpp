@@ -1,6 +1,7 @@
 #include <TelepathyQt/AccountSet>
 #include <TelepathyQt/PendingOperation>
 #include <TelepathyQt/PendingReady>
+#include <TelepathyQt/BaseProtocol>
 #include <QDebug>
 #include <QtDBus>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "types.hpp"
 #include "defines.hpp"
 #include "pipe_interface.h"
+#include "protocol.hpp"
 
 namespace init {
 
@@ -66,19 +68,15 @@ void PipeConnectionManager::init() {
 void PipeConnectionManager::onAccountManagerReady(Tp::PendingOperation *op) {
 
     if(op->isError()) {
-        qWarning() << "Account manager cannot become ready:" <<
-            op->errorName() << "-" << op->errorMessage();
+        qWarning() << "Account manager cannot become ready:" 
+            << op->errorName() << "-" << op->errorMessage();
 
         return;
     }
-
     std::vector<PipePtr> pipes = init::discoverPipes(dbusConnection());
     for(auto& pipe: pipes) {
-        // do sth
+        addProtocol(Tp::BaseProtocolPtr(
+                    new PipeProtocol(dbusConnection(), pipe->name() + "_pipe", pipe, amp)));
     }
-
-    Tp::AccountSetPtr validAccounts = amp->validAccounts();
-    qDebug() << "Accounts: " << validAccounts->accounts().size();
-
     registerObject();
 }
