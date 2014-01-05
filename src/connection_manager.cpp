@@ -76,7 +76,7 @@ void PipeConnectionManager::onAccountManagerReady(Tp::PendingOperation *op) {
     std::vector<PipePtr> pipes = init::discoverPipes(dbusConnection());
     for(auto& pipe: pipes) {
         addProtocol(Tp::BaseProtocolPtr(
-                    new PipeProtocol(dbusConnection(), pipe->name() + "_pipe", pipe, amp)));
+                    new PipeProtocol(dbusConnection(), pipe->name() + "Pipe", pipe, amp)));
     }
     registerObject();
 }
