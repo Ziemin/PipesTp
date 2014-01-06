@@ -17,7 +17,8 @@ namespace init {
     std::vector<PipePtr> discoverPipes(const QDBusConnection& connection) {
 
         QDBusConnectionInterface *dci = connection.interface();
-        QDBusReply<QStringList> servicesRep = dci->registeredServiceNames();
+        QDBusInterface dbus(dci->service(), dci->path(), dci->interface(), connection);
+        QDBusReply<QStringList> servicesRep = dbus.call("ListActivatableNames");
 
         std::vector<PipePtr> pipes;
 
@@ -28,10 +29,19 @@ namespace init {
 
             QString path;
             for(auto it = pipeServices.constBegin(); it != pipeServices.constEnd(); ++it) {
-                qDebug() << "Found pipe service - > " + *it;
-                path = "/" + *it;
-                path.replace('.', '/');
-                pipes.push_back(std::make_shared<Pipe>(*it, path, connection));
+                QDBusReply<bool> isRegisteredRep = dci->isServiceRegistered(*it);
+                QDBusReply<void> startServiceRep;
+                if((isRegisteredRep.isValid() && isRegisteredRep.value()) 
+                        || (startServiceRep = dci->startService(*it), startServiceRep.isValid())) 
+                {
+                    qDebug() << "Pipe service - > " + *it + " is started";
+                    path = "/" + *it;
+                    path.replace('.', '/');
+                    pipes.push_back(std::make_shared<Pipe>(*it, path, connection));
+                } else {
+                    qWarning() << "Pipe service - > " + *it + " could not be started";
+               
+                }
             }
         } else {
             qWarning() << "Could not obtain services list from dbus connection";

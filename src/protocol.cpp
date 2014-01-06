@@ -1,3 +1,5 @@
+#include <TelepathyQt/AccountSet>
+
 #include "protocol.hpp"
 
 PipeProtocol::PipeProtocol(
@@ -10,7 +12,7 @@ PipeProtocol::PipeProtocol(
     amp(amp)
 {
 
-    setEnglishName(QLatin1String("Pipe: ") + QLatin1String(pipe->name().toStdString().c_str()));
+    setEnglishName(QLatin1String("Pipe-") + QLatin1String(pipe->name().toStdString().c_str()));
     setIconName(englishName() + QLatin1String("-icon"));
     setVCardField(englishName().toLower());
 
@@ -18,7 +20,9 @@ PipeProtocol::PipeProtocol(
             Tp::RequestableChannelClassSpecList(pipe->requestableChannelClasses()));
 
     setParameters(Tp::ProtocolParameterList() <<
-            Tp::ProtocolParameter(QLatin1String("example-param"),
+            Tp::ProtocolParameter(QLatin1String("Protocol"),
+                QLatin1String("s"), Tp::ConnMgrParamFlagRequired)
+            << Tp::ProtocolParameter(QLatin1String("Account identifier"),
                 QLatin1String("s"), Tp::ConnMgrParamFlagRequired));
 
     // set callbacks
@@ -52,6 +56,14 @@ PipeProtocol::PipeProtocol(
 }
 
 Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &parameters, Tp::DBusError *error) {
+    Tp::AccountSetPtr accSet = amp->validAccounts();
+    QList<Tp::AccountPtr> accnts= accSet->accounts();
+    for(auto ap: accnts) {
+        qDebug() << "unique id: " << ap->uniqueIdentifier() << "\n"
+            << "normalized name: " << ap->normalizedName() << "\n"
+            << "protocol name: " << ap->protocolName() << "\n"
+            << "display name: " << ap->displayName();
+    }
     return Tp::BaseConnectionPtr();
 }
 
