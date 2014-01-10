@@ -19,10 +19,6 @@ class PipeConnectionManager : public Tp::BaseConnectionManager {
         
         void init();
 
-    private Q_SLOTS:
-
-        void onAccountManagerReady(Tp::PendingOperation *op);
-
     private:
 
         Tp::AccountManagerPtr amp;

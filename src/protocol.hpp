@@ -21,6 +21,8 @@ class PipeProtocol : public Tp::BaseProtocol {
                 PipePtr pipe,
                 Tp::AccountManagerPtr amp);
 
+        virtual ~PipeProtocol() = default;
+
     private:
 
         Tp::BaseConnectionPtr createConnection(const QVariantMap &parameters, Tp::DBusError *error);

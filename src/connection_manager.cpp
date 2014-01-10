@@ -72,21 +72,20 @@ void PipeConnectionManager::init() {
     amp = Tp::AccountManager::create(dbusConnection());
     connect(amp->becomeReady(Tp::Features(Tp::AccountManager::FeatureCore)),
             &Tp::PendingOperation::finished, 
-            this, &PipeConnectionManager::onAccountManagerReady);
-}
+            this, [this](Tp::PendingOperation *op) {
 
-void PipeConnectionManager::onAccountManagerReady(Tp::PendingOperation *op) {
+                if(op->isError()) {
+                    qWarning() << "Account manager cannot become ready:" 
+                        << op->errorName() << "-" << op->errorMessage();
 
-    if(op->isError()) {
-        qWarning() << "Account manager cannot become ready:" 
-            << op->errorName() << "-" << op->errorMessage();
+                    return;
+                }
+                std::vector<PipePtr> pipes = init::discoverPipes(dbusConnection());
+                for(auto& pipe: pipes) {
+                    addProtocol(Tp::BaseProtocolPtr(
+                                new PipeProtocol(dbusConnection(), pipe->name() + "Pipe", pipe, amp)));
+                }
+                registerObject();
 
-        return;
-    }
-    std::vector<PipePtr> pipes = init::discoverPipes(dbusConnection());
-    for(auto& pipe: pipes) {
-        addProtocol(Tp::BaseProtocolPtr(
-                    new PipeProtocol(dbusConnection(), pipe->name() + "Pipe", pipe, amp)));
-    }
-    registerObject();
+            });
 }
