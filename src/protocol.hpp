@@ -18,7 +18,7 @@ class PipeProtocol : public Tp::BaseProtocol {
         PipeProtocol(
                 const QDBusConnection &dbusConnection, 
                 const QString &name,
-                PipePtr pipe,
+                const PipePtr &pipe,
                 Tp::AccountManagerPtr amp);
 
         virtual ~PipeProtocol() = default;

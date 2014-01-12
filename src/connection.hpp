@@ -29,11 +29,11 @@ class PipeConnection : public Tp::BaseConnection {
     private:
 
         Tp::BaseChannelPtr createChannelCb(
-                const QString &channelType, uint targetHanldeType, uint targetHandle, DBusError *error);
+                const QString &channelType, uint targetHandleType, uint targetHandle, DBusError *error);
 
         Tp::UIntList requestHandlesCb(uint handleType, const QStringList &identifiers, DBusError *error);
         void connectCb(DBusError *error);
-        QStringList insectHandlesCb(uint handleType, const Tp::UIntList &handles, DBusError *error);
+        QStringList inspectHandlesCb(uint handleType, const Tp::UIntList &handles, DBusError *error);
 
     private:
 

@@ -1,6 +1,8 @@
 #include <TelepathyQt/AccountSet>
+#include <TelepathyQt/Constants>
 
 #include "protocol.hpp"
+#include "utils.hpp"
 
 PipeProtocol::PipeProtocol(
         const QDBusConnection &dbusConnection, 
@@ -22,7 +24,7 @@ PipeProtocol::PipeProtocol(
     setParameters(Tp::ProtocolParameterList() <<
             Tp::ProtocolParameter(QLatin1String("Protocol"),
                 QLatin1String("s"), Tp::ConnMgrParamFlagRequired)
-            << Tp::ProtocolParameter(QLatin1String("Account identifier"),
+            << Tp::ProtocolParameter(QLatin1String("Display name"),
                 QLatin1String("s"), Tp::ConnMgrParamFlagRequired));
 
     // set callbacks
@@ -55,15 +57,46 @@ PipeProtocol::PipeProtocol(
     plugInterface(Tp::AbstractProtocolInterfacePtr::dynamicCast(presenceIface));
 }
 
+
+bool isConnectionPipable(const PipeProtocol &protocol, const Tp::ConnectionPtr &connection) {
+
+    return false;
+}
+
 Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &parameters, Tp::DBusError *error) {
+
+    auto protocolIt = parameters.constFind("Protocol");
+    auto displayNameIt = parameters.constFind("Display name");
+    if(protocolIt == parameters.constEnd() || displayNameIt == parameters.constEnd()
+            || !protocolIt->isValid() || !displayNameIt->isValid()) 
+    {
+        pDebug() << "Creating connection with not enaugh parameters for protocol: " << name();
+        error->set(TP_QT_ERROR_INVALID_ARGUMENT, 
+                QString("Not enaugh parameters were provided to create connection for protocol: ") + name());
+        return Tp::BaseConnectionPtr();
+    }
+
     Tp::AccountSetPtr accSet = amp->validAccounts();
     QList<Tp::AccountPtr> accnts= accSet->accounts();
     for(auto ap: accnts) {
-        qDebug() << "unique id: " << ap->uniqueIdentifier() << "\n"
-            << "normalized name: " << ap->normalizedName() << "\n"
-            << "protocol name: " << ap->protocolName() << "\n"
-            << "display name: " << ap->displayName();
+        // found proper account
+        if(ap->protocolName() == protocolIt->value<QString>() && ap->displayName() == displayNameIt->value<QString>()) {
+            pDebug() << "Creating piped connection for account: " 
+                << ap->objectPath();
+
+            Tp::ConnectionPtr pipedConnection = ap->connection();
+            if(isConnectionPipable(*this, pipedConnection)) {
+                // TODO create connection
+            } else {
+                error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Connection cannot be piped through pipe: " + pipe->name());
+                return Tp::BaseConnectionPtr();
+            }
+        }
     }
+
+    pDebug() << "Could not find suitable connection to pipe for parameters:\n"
+        << "protocol: " << protocolIt->value<QString>() << " Display name: " << displayNameIt->value<QString>();
+    error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Could not find connection to pipe for provided parameters");
     return Tp::BaseConnectionPtr();
 }
 

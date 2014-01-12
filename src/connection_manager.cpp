@@ -1,7 +1,10 @@
+#include <TelepathyQt/ClientRegistrar>
 #include <TelepathyQt/AccountSet>
 #include <TelepathyQt/PendingOperation>
 #include <TelepathyQt/PendingReady>
 #include <TelepathyQt/BaseProtocol>
+#include <TelepathyQt/RequestableChannelClassSpecList>
+#include <TelepathyQt/ChannelClassSpecList>
 #include <QDebug>
 #include <QtDBus>
 #include <vector>
@@ -11,6 +14,7 @@
 #include "defines.hpp"
 #include "pipe_interface.h"
 #include "protocol.hpp"
+#include "utils.hpp"
 
 namespace init {
 
@@ -24,8 +28,15 @@ namespace init {
 
         if(servicesRep.isValid()) {
 
-            QStringList pipeServices = servicesRep.value()
-                .filter(QRegExp("^" TP_QT_IFACE_PIPE ".*$"));
+            // obtaining all pipe services
+            QStringList pipeServices = servicesRep.value().filter(QRegExp("^" TP_QT_IFACE_PIPE ".*$"));
+            QDBusReply<QStringList> regServicesReply = dci->registeredServiceNames(); // not activatable
+            if(regServicesReply.isValid()) {
+                QStringList registeredPipes = regServicesReply.value().filter(QRegExp("^" TP_QT_IFACE_PIPE ".*$"));
+                for(auto &servName: registeredPipes) {
+                    if(!pipeServices.contains(servName)) pipeServices << servName;
+                }
+            }
 
             QString path;
             for(auto it = pipeServices.constBegin(); it != pipeServices.constEnd(); ++it) {
@@ -34,17 +45,16 @@ namespace init {
                 if((isRegisteredRep.isValid() && isRegisteredRep.value()) 
                         || (startServiceRep = dci->startService(*it), startServiceRep.isValid())) 
                 {
-                    qDebug() << "Pipe service - > " + *it + " is started";
+                    pDebug() << "Pipe service - > " + *it + " is started";
                     path = "/" + *it;
                     path.replace('.', '/');
                     pipes.push_back(std::make_shared<Pipe>(*it, path, connection));
                 } else {
-                    qWarning() << "Pipe service - > " + *it + " could not be started";
-               
+                    pWarning() << "Pipe service - > " + *it + " could not be started";
                 }
             }
         } else {
-            qWarning() << "Could not obtain services list from dbus connection";
+            pWarning() << "Could not obtain services list from dbus connection";
         }
 
         return pipes;
@@ -59,6 +69,7 @@ PipeConnectionManager::PipeConnectionManager(
         const QString& name) 
 : Tp::BaseConnectionManager(connection, name)
 {
+    registrar = Tp::ClientRegistrar::create();
     init();
 }
 
@@ -75,17 +86,49 @@ void PipeConnectionManager::init() {
             this, [this](Tp::PendingOperation *op) {
 
                 if(op->isError()) {
-                    qWarning() << "Account manager cannot become ready:" 
+                    pCritical() << "Account manager cannot become ready:" 
                         << op->errorName() << "-" << op->errorMessage();
 
-                    return;
+                        QCoreApplication::exit(1);
                 }
+                Tp::ChannelClassSpecList channelFilter;
                 std::vector<PipePtr> pipes = init::discoverPipes(dbusConnection());
+                if(pipes.empty()) pWarning() << "No pipes found";
                 for(auto& pipe: pipes) {
                     addProtocol(Tp::BaseProtocolPtr(
                                 new PipeProtocol(dbusConnection(), pipe->name() + "Pipe", pipe, amp)));
-                }
-                registerObject();
 
+                    // building channel filter for approver
+                    Tp::RequestableChannelClassSpecList protoRecList = pipe->requestableChannelClasses();
+                    for(auto &reqChanSpec: protoRecList) {
+                        channelFilter << Tp::ChannelClassSpec(
+                            reqChanSpec.channelType(), 
+                            reqChanSpec.targetHandleType(),
+                            reqChanSpec.fixedProperties());
+                    }
+                }
+
+                // registering objects
+                if(!registerObject()) {
+                    qCritical() << "Could not register pipe connection manager";
+                    QCoreApplication::exit(1);
+                }
+
+                pipeApprover = PipeApproverPtr(new PipeApprover(channelFilter, *this));
+                if(!registrar->registerClient(
+                    Tp::AbstractClientPtr::dynamicCast(pipeApprover), 
+                    "pipeApprover")) 
+                {
+                    pCritical() << "Could not register pipeApprover";
+                    QCoreApplication::exit(1);
+                }
             });
+}
+
+
+CaseHandler<void> PipeConnectionManager::checkNewChannel(
+        const Tp::ConnectionPtr &connection, const Tp::AccountPtr &account, const QList<Tp::ChannelPtr> &channels) const 
+{
+    // TODO implement
+    return CaseHandler<void>();
 }
