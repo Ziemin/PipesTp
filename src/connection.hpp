@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "types.hpp"
+#include "contact_list.hpp"
 
 
 class PipeConnection : public Tp::BaseConnection {
@@ -67,9 +68,11 @@ class PipeConnection : public Tp::BaseConnection {
 
         uint setPresenceCb(const QString &status, const QString &statusMessage, Tp::DBusError *error);
 
+        void pipePresenceChange(const Tp::SimpleContactPresences &contactPresences);
+
     private:
 
-        void addContactsInterface();
+        void addContactsInterface(const QStringList &supportedInterfaces);
         void addContactListInterface();
         void addSimplePresenceInterface();
         void addAdressingInterface();
@@ -79,6 +82,7 @@ class PipeConnection : public Tp::BaseConnection {
 
         Tp::ConnectionPtr pipedConnection;
         PipePtr pipe;
+        std::unique_ptr<PipeContactList> contactListPtr;
 };
 
 typedef Tp::SharedPtr<PipeConnection> PipeConnectionPtr;
