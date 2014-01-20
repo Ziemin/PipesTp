@@ -3,6 +3,7 @@
 
 #include "protocol.hpp"
 #include "utils.hpp"
+#include "defines.hpp"
 
 PipeProtocol::PipeProtocol(
         const QDBusConnection &dbusConnection, 
@@ -86,7 +87,13 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
 
             Tp::ConnectionPtr pipedConnection = ap->connection();
             if(isConnectionPipable(*this, pipedConnection)) {
-                // TODO create connection
+                return Tp::BaseConnectionPtr(new PipeConnection(
+                            pipedConnection,
+                            pipe,
+                            QDBusConnection::sessionBus(),
+                            TP_QT_PIPE_CONNECTION_MANAGER_NAME,
+                            name(),
+                            parameters));
             } else {
                 error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Connection cannot be piped through pipe: " + pipe->name());
                 return Tp::BaseConnectionPtr();

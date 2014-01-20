@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     registerPipeTypes();
 
     QDBusConnection dbusConnection = QDBusConnection::sessionBus();
-    PipeConnectionManager cm(dbusConnection, QLatin1String("pipes"));
+    PipeConnectionManager cm(dbusConnection);
 
     return app.exec();
 }

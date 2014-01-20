@@ -19,7 +19,6 @@ void PipeApprover::addDispatchOperation(const Tp::MethodInvocationContextPtr<> &
 {
     CaseHandler<void> handler = pipeCM.checkNewChannel(
             dispatchOperation->connection(),
-            dispatchOperation->account(),
             dispatchOperation->channels());
 
     if(handler) {

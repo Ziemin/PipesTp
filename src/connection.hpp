@@ -11,7 +11,8 @@
 
 class PipeConnection : public Tp::BaseConnection {
 
-    protected:
+
+    public:
 
         PipeConnection(
                 const Tp::ConnectionPtr &pipedConnection,
@@ -21,19 +22,58 @@ class PipeConnection : public Tp::BaseConnection {
                 const QString &protocolName,
                 const QVariantMap &parameters);
 
-    public:
-
         virtual ~PipeConnection() = default;
         virtual QString uniqueName() const override;
+        Tp::ConnectionPtr getPipedConnection() const;
+
+        /**
+         * Check if given channel has to be piped through this connection
+         */
+        bool checkChannel(const Tp::Channel &channel) const;
+        /**
+         * @param channel to be piped
+         * @returns piped channel
+         */
+        Tp::ChannelPtr pipeChannel(const Tp::Channel &channel) const;
 
     private:
 
         Tp::BaseChannelPtr createChannelCb(
-                const QString &channelType, uint targetHandleType, uint targetHandle, DBusError *error);
+                const QString &channelType, uint targetHandleType, uint targetHandle, Tp::DBusError *error);
 
-        Tp::UIntList requestHandlesCb(uint handleType, const QStringList &identifiers, DBusError *error);
-        void connectCb(DBusError *error);
-        QStringList inspectHandlesCb(uint handleType, const Tp::UIntList &handles, DBusError *error);
+        Tp::UIntList requestHandlesCb(uint handleType, const QStringList &identifiers, Tp::DBusError *error);
+
+        void connectCb(Tp::DBusError *error);
+
+        QStringList inspectHandlesCb(uint handleType, const Tp::UIntList &handles, Tp::DBusError *error);
+
+        Tp::ContactAttributesMap getContactAttributesCb(
+                const Tp::UIntList &handles, const QStringList &interfaces, Tp::DBusError *error);
+
+        Tp::ContactAttributesMap getContactListAttributesCb(
+                const QStringList &interfaces, bool hold, Tp::DBusError *error);
+
+        void requestSubscriptionCb(const Tp::UIntList &contacts, const QString &message, Tp::DBusError *error);
+
+        void getContactsByVCardFieldCb(
+                const QString &field, const QStringList &addresses, const QStringList &interfaces,
+                Tp::AddressingNormalizationMap &addressingNormalizationMap, 
+                Tp::ContactAttributesMap &contactAttributesMap, Tp::DBusError *error); 
+
+        void getContactsByURICb(
+                const QStringList &URIs, const QStringList &interfaces,
+                Tp::AddressingNormalizationMap &addressingNormalizationMap, 
+                Tp::ContactAttributesMap &contactAttributesMap, Tp::DBusError *error);
+
+        uint setPresenceCb(const QString &status, const QString &statusMessage, Tp::DBusError *error);
+
+    private:
+
+        void addContactsInterface();
+        void addContactListInterface();
+        void addSimplePresenceInterface();
+        void addAdressingInterface();
+        void addRequestsInterface();
 
     private:
 
@@ -41,90 +81,6 @@ class PipeConnection : public Tp::BaseConnection {
         PipePtr pipe;
 };
 
-
-class PipeConnectionContactsInterface : public Tp::BaseConnectionContactsInterface {
-
-    public:
-
-        PipeConnectionContactsInterface(const Tp::ConnectionPtr &pipedConnection);
-        virtual ~PipeConnectionContactsInterface() = default;
-
-    private:
-
-        Tp::ContactAttributesMap getContactAttributesCb(
-                const Tp::UIntList &handles, const QStringList &interfaces, DBusError *error);
-
-    private:
-
-        Tp::ConnectionPtr pipedConnection;
-};
-
-
-class PipeConnectionSimplePresenceInterface : public Tp::BaseConnectionSimplePresenceInterface {
-
-    public:
-
-        PipeConnectionSimplePresenceInterface(const Tp::ConnectionPtr &pipedConnection);
-        virtual ~PipeConnectionSimplePresenceInterface() = default;
-
-    private:
-
-        uint setPresenceCb(const QString &status, const QString &statusMessage, DBusError *error);
-
-    private:
-
-        Tp::ConnectionPtr pipedConnection;
-};
-
-
-class PipeConnectionContactListInterface : public Tp::BaseConnectionContactListInterface {
-
-    public:
-
-        PipeConnectionContactListInterface(const Tp::ConnectionPtr &pipedConnection);
-        virtual ~PipeConnectionContactListInterface() = default;
-
-    private:
-
-        Tp::ContactAttributesMap setGetContactListAttributesCb(
-                const QStringList &interfaces, bool hold, DBusError *error);
-
-        void setRequestSubscriptionCb(const Tp::UIntList &contacts, const QString &message, DBusError *error);
-
-    private:
-
-        Tp::ConnectionPtr pipedConnection;
-};
-
-
-class PipeConnectionAddressingInterface : public Tp::BaseConnectionAddressingInterface {
-
-    public:
-
-        PipeConnectionAddressingInterface(const Tp::ConnectionPtr &pipedConnection);
-        virtual ~PipeConnectionAddressingInterface() = default;
-
-    private:
-
-        void getContactsByVCardFieldCb(
-                const QString &field, const QStringList &addresses, const QStringList &interfaces,
-                Tp::AddressingNormalizationMap &addressingNormalizationMap, 
-                Tp::ContactAttributesMap &contactAttributesMap, DBusError *error); 
-
-        void getContactsByURICb(
-                const QStringList &URIs, const QStringList &interfaces,
-                Tp::AddressingNormalizationMap &addressingNormalizationMap, 
-                Tp::ContactAttributesMap &contactAttributesMap, DBusError *error);
-
-    private:
-
-        Tp::ConnectionPtr pipedConnection;
-
-};
-
 typedef Tp::SharedPtr<PipeConnection> PipeConnectionPtr;
-typedef Tp::SharedPtr<PipeConnectionSimplePresenceInterface> PipeConnectionSimplePresenceInterfacePtr;
-typedef Tp::SharedPtr<PipeConnectionContactListInterface> PipeConnectionContactListInterfacePtr;
-typedef Tp::SharedPtr<PipeConnectionAddressingInterface> PipeConnectionAddressingInterfacePtr;
 
 #endif

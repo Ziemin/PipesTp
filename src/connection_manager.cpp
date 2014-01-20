@@ -5,6 +5,7 @@
 #include <TelepathyQt/BaseProtocol>
 #include <TelepathyQt/RequestableChannelClassSpecList>
 #include <TelepathyQt/ChannelClassSpecList>
+#include <TelepathyQt/ChannelDispatcher>
 #include <QDebug>
 #include <QtDBus>
 #include <vector>
@@ -62,12 +63,42 @@ namespace init {
 
 } /* init namespace */
 
+void pipeChannels(PipeConnectionPtr pipeCon, std::vector<Tp::ChannelPtr> channels) {
+
+    Tp::ObjectPathList pathsToNewChannels;
+    for(auto &chan: channels) {
+        try {
+            pDebug() << "Piping channel: " << chan->objectPath();
+            pathsToNewChannels << QDBusObjectPath(pipeCon->pipeChannel(*chan.data())->objectPath());
+        } catch(...) {
+            pWarning() << "Could not pipe: " << chan->objectPath();
+        }
+    }
+    if(pathsToNewChannels.empty()) return;
+
+    Tp::Client::ChannelDispatcherInterface channelDispatcher(
+            TP_QT_CHANNEL_DISPATCHER_BUS_NAME, 
+            TP_QT_CHANNEL_DISPATCHER_OBJECT_PATH);
+    // TODO zero in meanwhile as user action time
+    pDebug() << "Delegating " << pathsToNewChannels.size() << " channels";
+
+    QDBusPendingReply<Tp::ObjectPathList, Tp::NotDelegatedMap> notDelegatedRep = 
+        channelDispatcher.DelegateChannels(pathsToNewChannels, 0, ""); 
+
+    if(notDelegatedRep.isValid()) {
+        Tp::NotDelegatedMap failChans = notDelegatedRep.argumentAt(1).value<Tp::NotDelegatedMap>();
+        for(auto it = failChans.cbegin(); it != failChans.cend(); ++it) {
+            pWarning() << "Could not delegate: " << it.key().path() << " due to: " << it.value().errorMessage;
+        }
+    } else {
+        pWarning() << "Could not get not delegated reply: " << notDelegatedRep.error().message();
+    }
+}
 
 // ---- PipeConnectionManager implementation ------------------------------------------------------
 PipeConnectionManager::PipeConnectionManager(
-        const QDBusConnection& connection, 
-        const QString& name) 
-: Tp::BaseConnectionManager(connection, name)
+        const QDBusConnection& connection) 
+: Tp::BaseConnectionManager(connection, TP_QT_PIPE_CONNECTION_MANAGER_NAME)
 {
     registrar = Tp::ClientRegistrar::create();
     init();
@@ -127,8 +158,26 @@ void PipeConnectionManager::init() {
 
 
 CaseHandler<void> PipeConnectionManager::checkNewChannel(
-        const Tp::ConnectionPtr &connection, const Tp::AccountPtr &account, const QList<Tp::ChannelPtr> &channels) const 
+        const Tp::ConnectionPtr &connection, const QList<Tp::ChannelPtr> &channels) const 
 {
-    // TODO implement
+    // search for connection piping given connection
+    QList<Tp::BaseConnectionPtr> pipeConnections = connections();
+    for(auto &c: pipeConnections) {
+        PipeConnectionPtr pipeCon = PipeConnectionPtr::dynamicCast(c);
+        Tp::ConnectionPtr wrappedConnection = pipeCon->getPipedConnection();
+        if(wrappedConnection->objectPath() == connection->objectPath()) {
+
+            std::vector<Tp::ChannelPtr> chansToPipe;
+            // now check if specific channels for contacts are desired
+            for(auto &chan: channels) {
+                if(pipeCon->checkChannel(*chan.data())) chansToPipe.push_back(chan);
+            }
+            if(chansToPipe.empty()) return CaseHandler<void>();
+            else {
+                return CaseHandler<void>(pipeChannels, pipeCon, std::move(chansToPipe));
+            }
+        }
+    }
+
     return CaseHandler<void>();
 }

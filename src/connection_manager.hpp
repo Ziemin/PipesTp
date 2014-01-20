@@ -16,15 +16,14 @@ class PipeConnectionManager : public Tp::BaseConnectionManager {
 
     public:
 
-        PipeConnectionManager(const QDBusConnection &connection, const QString &name);
+        PipeConnectionManager(const QDBusConnection &connection);
         virtual QVariantMap immutableProperties() const override;
 
         /**
          * Checks if upcoming channel should be piped
          * @return CaseHandler void with valid handler if true, otherwise handler is set to false
          */
-        CaseHandler<void> checkNewChannel(
-                const Tp::ConnectionPtr &connection, const Tp::AccountPtr &account, const QList<Tp::ChannelPtr> &channels) const;
+        CaseHandler<void> checkNewChannel(const Tp::ConnectionPtr &connection, const QList<Tp::ChannelPtr> &channels) const;
 
     private:
         
