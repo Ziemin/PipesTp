@@ -23,6 +23,8 @@ set(pipe_xml ${PipesTp_SOURCE_DIR}/interfaces/org.freedesktop.Telepathy.Pipe.xml
 message(${pipe_xml})
 
 set(PipesTp_SRCS 
+    contact_list.cpp
+    simple_presence.cpp
     connection.cpp
     connection_manager.cpp
     approver.cpp

@@ -8,6 +8,7 @@
 
 #include "types.hpp"
 #include "contact_list.hpp"
+#include "simple_presence.hpp"
 
 
 class PipeConnection : public Tp::BaseConnection {
@@ -83,6 +84,7 @@ class PipeConnection : public Tp::BaseConnection {
         Tp::ConnectionPtr pipedConnection;
         PipePtr pipe;
         std::unique_ptr<PipeContactList> contactListPtr;
+        std::unique_ptr<PipeSimplePresence> simplePresencePtr;
 };
 
 typedef Tp::SharedPtr<PipeConnection> PipeConnectionPtr;
