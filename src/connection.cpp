@@ -13,7 +13,8 @@ PipeConnection::PipeConnection(
         const QDBusConnection &dbusConnection,
         const QString &cmName,
         const QString &protocolName,
-        const QVariantMap &parameters) 
+        const QVariantMap &parameters,
+        const ConnectionAdditionalData& additionalData) 
     : Tp::BaseConnection(dbusConnection, cmName, protocolName, parameters),
     pipedConnection(pipedConnection), pipe(pipe)
 {
@@ -43,8 +44,6 @@ PipeConnection::PipeConnection(
             } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACT_LIST) {
                 supportedInterfaces << interface;
                 isContactListSupported = true;
-                pDebug() << "Adding contact list interface to connection piping: " << pipedConnection->objectPath();
-                addContactListInterface();
             } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE) {
                 supportedInterfaces << interface;
                 pDebug() << "Adding simple presence interface to connection piping: " << pipedConnection->objectPath();
@@ -63,32 +62,50 @@ PipeConnection::PipeConnection(
         pWarning() << "Could not get interfaces for connection piping: " << pipedConnection->objectPath();
     }
 
+    // Assuming these both interfaces are always implemented at the same time
     if(isContactListSupported && isContactsSupported) {
-        pDebug() << "Adding contacts interface to connection piping: " << pipedConnection->objectPath();
-        addContactsInterface(supportedInterfaces);
+        Tp::Client::DBus::PropertiesInterface propsIface(
+                QDBusConnection::sessionBus(), pipedConnection->busName(), pipedConnection->objectPath());
+        QDBusPendingReply<QDBusVariant> interfacesRep = propsIface.Get(
+                TP_QT_IFACE_CONNECTION_INTERFACE_CONTACTS, "ContactAttributeInterfaces");
+        interfacesRep.waitForFinished();
+
+        if(interfacesRep.isValid()) {
+            QStringList interfaces = interfacesRep.value().variant().value<QStringList>();
+            pDebug() << "Adding contact list interface to connection piping: " << pipedConnection->objectPath();
+            addContactListInterface(additionalData.contactListFileName, interfaces);
+            pDebug() << "Adding contacts interface to connection piping: " << pipedConnection->objectPath();
+            addContactsInterface(interfaces);
+        } else {
+            pWarning() << "Could not get list of ContactAttributeInterfaces";
+        }
+
     }
 
     if(contactListPtr != nullptr && simplePresencePtr != nullptr) 
         simplePresencePtr->setContactList(contactListPtr.get());
+    if(contactListPtr == nullptr) 
+        setStatus(pipedConnection->status(), Tp::ConnectionStatusReasonNoneSpecified); 
 
     connect(pipedConnection.data(), &Tp::Connection::statusChanged,
             this, [this](Tp::ConnectionStatus pipedStatus) {
                 // setting new status to with reason none specified due to incomplete implementation 
                 // of signals in Connection class - TODO
-                setStatus(pipedStatus, Tp::ConnectionStatusReasonNoneSpecified); 
+                if(contactListPtr->isLoaded()) 
+                    setStatus(pipedStatus, Tp::ConnectionStatusReasonNoneSpecified); 
             });
 }
 
-void PipeConnection::addContactsInterface(const QStringList &supportedInterfaces) {
+void PipeConnection::addContactsInterface(const QStringList& interfaces) {
     // TODO getContactByID not implemented in telepathy-qt
     Tp::BaseConnectionContactsInterfacePtr contactsIface = Tp::BaseConnectionContactsInterface::create();
     contactsIface->setGetContactAttributesCallback(Tp::memFun(this, &PipeConnection::getContactAttributesCb));
-    contactsIface->setContactAttributeInterfaces(supportedInterfaces);
+    contactsIface->setContactAttributeInterfaces(interfaces);
 
     plugInterface(Tp::AbstractConnectionInterfacePtr::dynamicCast(contactsIface));
 }
 
-void PipeConnection::addContactListInterface() {
+void PipeConnection::addContactListInterface(const QString& contactListFilename, const QStringList& interfaces) {
 
     Tp::BaseConnectionContactListInterfacePtr contactListIface = Tp::BaseConnectionContactListInterface::create();
     contactListIface->setGetContactListAttributesCallback(Tp::memFun(this, &PipeConnection::getContactListAttributesCb));
@@ -96,13 +113,14 @@ void PipeConnection::addContactListInterface() {
 
     ContactList *pipedList = pipedConnection->interface<ContactList>();
 
-    contactListPtr.reset(new PipeContactList(pipedList, contactListIface));
+    contactListPtr.reset(new PipeContactList(pipedList, contactListIface, contactListFilename, interfaces));
     // obtain contact list asynchronously
     std::async(std::launch::async, 
             [this, contactListIface] {
                 try {
                     pDebug() << "async";
                     this->contactListPtr->loadContactList();
+                    setStatus(pipedConnection->status(), Tp::ConnectionStatusReasonNoneSpecified);
                 } catch(PipeException<ContactListError> &e) { // it failed set it from here
                     contactListIface->setContactListState(Tp::ContactListStateFailure);
                     pWarning() << "Could not load contact list for connection: " << this->objectPath()

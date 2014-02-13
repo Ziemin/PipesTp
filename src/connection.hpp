@@ -10,6 +10,10 @@
 #include "contact_list.hpp"
 #include "simple_presence.hpp"
 
+struct ConnectionAdditionalData {
+    QString contactListFileName;
+};
+
 
 class PipeConnection : public Tp::BaseConnection {
 
@@ -22,7 +26,8 @@ class PipeConnection : public Tp::BaseConnection {
                 const QDBusConnection &dbusConnection,
                 const QString &cmName,
                 const QString &protocolName,
-                const QVariantMap &parameters);
+                const QVariantMap &parameters,
+                const ConnectionAdditionalData& additionalData);
 
         virtual ~PipeConnection() = default;
         virtual QString uniqueName() const override;
@@ -73,8 +78,8 @@ class PipeConnection : public Tp::BaseConnection {
 
     private:
 
-        void addContactsInterface(const QStringList &supportedInterfaces);
-        void addContactListInterface();
+        void addContactsInterface(const QStringList& interfaces);
+        void addContactListInterface(const QString& contactListFileName, const QStringList& interfaces);
         void addSimplePresenceInterface();
         void addAdressingInterface();
         void addRequestsInterface();

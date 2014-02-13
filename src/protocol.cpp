@@ -26,7 +26,7 @@ PipeProtocol::PipeProtocol(
     setParameters(Tp::ProtocolParameterList() <<
             Tp::ProtocolParameter(QLatin1String("Protocol"),
                 QLatin1String("s"), Tp::ConnMgrParamFlagRequired)
-            << Tp::ProtocolParameter(QLatin1String("Display name"),
+            << Tp::ProtocolParameter(QLatin1String("Identificator"),
                 QLatin1String("s"), Tp::ConnMgrParamFlagRequired));
 
     // set callbacks
@@ -100,9 +100,9 @@ bool isConnectionPipable(const PipeProtocol &protocol, const Tp::ConnectionPtr &
 Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &parameters, Tp::DBusError *error) {
 
     auto protocolIt = parameters.constFind("Protocol");
-    auto displayNameIt = parameters.constFind("Display name");
-    if(protocolIt == parameters.constEnd() || displayNameIt == parameters.constEnd()
-            || !protocolIt->isValid() || !displayNameIt->isValid()) 
+    auto nameIt = parameters.constFind("Identificator");
+    if(protocolIt == parameters.constEnd() || nameIt == parameters.constEnd()
+            || !protocolIt->isValid() || !nameIt->isValid()) 
     {
         pDebug() << "Creating connection with not enaugh parameters for protocol: " << name();
         error->set(TP_QT_ERROR_INVALID_ARGUMENT, 
@@ -114,7 +114,7 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
     QList<Tp::AccountPtr> accnts= accSet->accounts();
     for(auto ap: accnts) {
         // found proper account
-        if(ap->protocolName() == protocolIt->value<QString>() && ap->displayName() == displayNameIt->value<QString>()) {
+        if(ap->protocolName() == protocolIt->value<QString>() && ap->normalizedName() == nameIt->value<QString>()) {
             pDebug() << "Creating piped connection for account: " << ap->objectPath();
 
             Tp::ConnectionPtr pipedConnection = ap->connection();
@@ -125,7 +125,8 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
                             QDBusConnection::sessionBus(),
                             TP_QT_PIPE_CONNECTION_MANAGER_NAME,
                             name(),
-                            parameters));
+                            parameters,
+                            { name() + "_" + protocolIt->value<QString>() + "_" + nameIt->value<QString>() }));
             } else {
                 error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Connection cannot be piped through pipe: " + pipe->name());
                 return Tp::BaseConnectionPtr();
@@ -134,7 +135,7 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
     }
 
     pDebug() << "Could not find suitable connection to pipe for parameters:\n"
-        << "protocol: " << protocolIt->value<QString>() << " Display name: " << displayNameIt->value<QString>();
+        << "protocol: " << protocolIt->value<QString>() << " Display name: " << nameIt->value<QString>();
     error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Could not find connection to pipe for provided parameters");
     return Tp::BaseConnectionPtr();
 }

@@ -5,10 +5,13 @@
 #include <TelepathyQt/ConnectionInterfaceContactListInterface>
 #include <TelepathyQt/BaseConnection>
 #include <atomic>
+#include <set>
+#include <vector>
 
 #include "pipe_exception.hpp"
 
 typedef Tp::Client::ConnectionInterfaceContactListInterface ContactList;
+typedef Tp::Client::ConnectionInterfaceContactsInterface ContactsIface;
 
 enum class ContactListError {
     UNDEFINED,
@@ -33,7 +36,11 @@ class PipeContactList : public QObject {
          * @param {Tp::BaseConnectionContactListInterfacePtr} contactListiface contact list interface
          *          related to some PipeConnection
          */
-        PipeContactList(ContactList *pipedList, const Tp::BaseConnectionContactListInterfacePtr &contactListIface);
+        PipeContactList(
+                ContactList *pipedList, 
+                const Tp::BaseConnectionContactListInterfacePtr &contactListIface,
+                const QString &contactListFileName, 
+                const QStringList &attributeInterfaces);
 
         /**
          * @return true if list was loaded and properly initialized
@@ -74,10 +81,16 @@ class PipeContactList : public QObject {
                 const Tp::HandleIdentifierMap &identifiers, const Tp::HandleIdentifierMap &removals);
         void contactsChangedCb(const Tp::ContactSubscriptionMap& changes, const Tp::UIntList& removals);
 
+        static std::vector<uint> loadFromFile(const QString& fileName);
+
     private:
         std::atomic_bool loaded;
         ContactList *pipedList;
         Tp::BaseConnectionContactListInterfacePtr contactListIface;
+        QString pathToContactList;
+        QStringList attributeInterfaces;
+        Tp::ContactAttributesMap pipedAttrMap;
+        std::set<uint> pipedHandles;
 };
 
 #endif
