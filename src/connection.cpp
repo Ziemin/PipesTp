@@ -4,6 +4,7 @@
 #include "simple_presence.hpp"
 
 #include <TelepathyQt/PendingVariant>
+#include <TelepathyQt/Connection>
 #include <future>
 
 PipeConnection::PipeConnection(
@@ -27,32 +28,43 @@ PipeConnection::PipeConnection(
     // check for interfaces and add if implemented
     QStringList supportedInterfaces;
     bool isContactsSupported = false, isContactListSupported = false;
-    for(auto &interface: pipedConnection->interfaces()) {
-        if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACTS) {
-            isContactsSupported = true;
-            supportedInterfaces << interface;
-        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACT_LIST) {
-            supportedInterfaces << interface;
-            isContactListSupported = true;
-            pDebug() << "Adding contact list interface to connection: " << objectPath();
-            addContactListInterface();
-        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE) {
-            supportedInterfaces << interface;
-            pDebug() << "Adding simple presence interface to connection: " << objectPath();
-            addSimplePresenceInterface();
-        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_ADDRESSING) {
-            supportedInterfaces << interface;
-            pDebug() << "Adding addressing interface to connection: " << objectPath();
-            addAdressingInterface();
-        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_REQUESTS) {
-            supportedInterfaces << interface;
-            pDebug() << "Adding requests interface to connection: " << objectPath();
-            addRequestsInterface();
+
+    // pipedConnection->interfaces(); // it returns gets nothing - WHY? (TODO fix lib)
+    Tp::Client::ConnectionInterface conIface(
+            QDBusConnection::sessionBus(), pipedConnection->busName(), pipedConnection->objectPath());
+    QDBusPendingReply<QStringList> interfacesRep = conIface.GetInterfaces();
+    interfacesRep.waitForFinished();
+
+    if(interfacesRep.isValid()) {
+        for(auto &interface: interfacesRep.value()) {
+            if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACTS) {
+                isContactsSupported = true;
+                supportedInterfaces << interface;
+            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACT_LIST) {
+                supportedInterfaces << interface;
+                isContactListSupported = true;
+                pDebug() << "Adding contact list interface to connection piping: " << pipedConnection->objectPath();
+                addContactListInterface();
+            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE) {
+                supportedInterfaces << interface;
+                pDebug() << "Adding simple presence interface to connection piping: " << pipedConnection->objectPath();
+                addSimplePresenceInterface();
+            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_ADDRESSING) {
+                supportedInterfaces << interface;
+                pDebug() << "Adding addressing interface to connection piping: " << pipedConnection->objectPath();
+                addAdressingInterface();
+            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_REQUESTS) {
+                supportedInterfaces << interface;
+                pDebug() << "Adding requests interface to connection piping: " << pipedConnection->objectPath();
+                addRequestsInterface();
+            }
         }
+    } else {
+        pWarning() << "Could not get interfaces for connection piping: " << pipedConnection->objectPath();
     }
 
     if(isContactListSupported && isContactsSupported) {
-        pDebug() << "Adding contacts interface to connection: " << objectPath();
+        pDebug() << "Adding contacts interface to connection piping: " << pipedConnection->objectPath();
         addContactsInterface(supportedInterfaces);
     }
 
@@ -89,6 +101,7 @@ void PipeConnection::addContactListInterface() {
     std::async(std::launch::async, 
             [this, contactListIface] {
                 try {
+                    pDebug() << "async";
                     this->contactListPtr->loadContactList();
                 } catch(PipeException<ContactListError> &e) { // it failed set it from here
                     contactListIface->setContactListState(Tp::ContactListStateFailure);

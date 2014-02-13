@@ -2,6 +2,7 @@ find_package(Qt5Core REQUIRED)
 find_package(Qt5DBus REQUIRED)
 find_package(Qt5Xml REQUIRED)
 find_package(Qt5Network REQUIRED)
+find_package(Threads)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS} -include qdbus_gen_includes.hpp")
 
@@ -38,8 +39,9 @@ add_library(PipesTp STATIC ${PipesTp_SRCS})
 qt5_use_modules(PipesTp Core DBus Xml Network)
 target_link_libraries(PipesTp ${TELEPATHY_QT5_LIBRARIES})
 target_link_libraries(PipesTp ${TELEPATHY_QT5_SERVICE_LIBRARIES})
+target_link_libraries(PipesTp ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(telepathy-pipes main.cpp)
 target_link_libraries(telepathy-pipes PipesTp)
 
-install(TARGETS telepathy-pipes DESTINATION lib)
+install(TARGETS telepathy-pipes DESTINATION lib/telepathy)

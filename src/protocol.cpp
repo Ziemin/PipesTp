@@ -1,5 +1,6 @@
 #include <TelepathyQt/AccountSet>
 #include <TelepathyQt/Constants>
+#include <TelepathyQt/ConnectionManager>
 
 #include "protocol.hpp"
 #include "utils.hpp"
@@ -61,7 +62,39 @@ PipeProtocol::PipeProtocol(
 
 bool isConnectionPipable(const PipeProtocol &protocol, const Tp::ConnectionPtr &connection) {
 
-    return false;
+    // check requestable channel classes
+    QString busName = QString(TP_QT_CONNECTION_MANAGER_BUS_NAME_BASE) + connection->cmName();
+    QString objectPath = QString(TP_QT_CONNECTION_MANAGER_OBJECT_PATH_BASE)
+        + connection->cmName() + "/" + connection->protocolName();
+
+    Tp::Client::DBus::PropertiesInterface propsIface(QDBusConnection::sessionBus(), busName, objectPath);
+
+    QDBusPendingReply<QDBusVariant> reqChanClassesRep = propsIface.Get(
+            TP_QT_IFACE_PROTOCOL, "RequestableChannelClasses");
+    reqChanClassesRep.waitForFinished();
+
+    if(reqChanClassesRep.isValid()) {
+        // unmarshalling
+        QDBusArgument dbusArg = reqChanClassesRep.value().variant().value<QDBusArgument>();
+        Tp::RequestableChannelClassList chList;
+        dbusArg >> chList;
+
+        Tp::RequestableChannelClassSpecList chSpecList(chList);
+        for(Tp::RequestableChannelClassSpec& chClass: protocol.requestableChannelClasses()) {
+            bool found = false;
+            for(auto& pipedChannelType: chSpecList) {
+                if(pipedChannelType.channelType() == chClass.channelType()) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) return false;
+        }
+        return true;
+    } else {
+        pDebug() << "Cannnot get RequestableChannelClasses property: " << reqChanClassesRep.error();
+        return false;
+    }
 }
 
 Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &parameters, Tp::DBusError *error) {
@@ -82,8 +115,7 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
     for(auto ap: accnts) {
         // found proper account
         if(ap->protocolName() == protocolIt->value<QString>() && ap->displayName() == displayNameIt->value<QString>()) {
-            pDebug() << "Creating piped connection for account: " 
-                << ap->objectPath();
+            pDebug() << "Creating piped connection for account: " << ap->objectPath();
 
             Tp::ConnectionPtr pipedConnection = ap->connection();
             if(isConnectionPipable(*this, pipedConnection)) {

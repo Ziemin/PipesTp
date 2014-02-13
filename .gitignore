@@ -18,3 +18,4 @@ PipeInterface.*
 pipe_interface.*
 install_manifest.txt
 telepathy-pipes
+local
