@@ -127,7 +127,7 @@ void PipeConnectionManager::init() {
                 if(pipes.empty()) pWarning() << "No pipes found";
                 for(auto& pipe: pipes) {
                     addProtocol(Tp::BaseProtocolPtr(
-                                new PipeProtocol(dbusConnection(), pipe->name() + "Pipe", pipe, amp)));
+                                new PipeProtocol(dbusConnection(), pipe->name() + "Pipe", pipe, amp, this)));
 
                     // building channel filter for approver
                     Tp::RequestableChannelClassSpecList protoRecList = pipe->requestableChannelClasses();

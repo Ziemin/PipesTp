@@ -5,8 +5,9 @@
 #include <TelepathyQt/ConnectionInterfaceContactListInterface>
 #include <TelepathyQt/BaseConnection>
 #include <atomic>
-#include <set>
+#include <map>
 #include <vector>
+#include <utility>
 
 #include "pipe_exception.hpp"
 
@@ -20,7 +21,8 @@ enum class ContactListError {
     NOT_IMPLEMENTED,
     NOT_AVAILABLE,
     SERVICE_BUSY,
-    NOT_YET
+    NOT_YET,
+    INVALID_HANDLE
 };
 
 typedef PipeException<ContactListError> ContactListExeption;
@@ -75,22 +77,45 @@ class PipeContactList : public QObject {
          */
         int addToList(const Tp::UIntList &contacts);
 
+        /**
+         * @return piped handles for given identifiers
+         * @throw ContactListException if there is no handle for at least on of identifiers
+         */
+        Tp::UIntList getHandlesFor(const QStringList &identifiers) const;
+
+        /**
+         * @return piped identifiers for given handles
+         * @throw ContactListException if there is no identifier for at least on of handles
+         */
+        QStringList getIdentifiersFor(const Tp::UIntList &handles) const;
+
+        /**
+         * @return true if such handle exists in this contact list
+         */
+        bool hasHandle(uint handle) const;
+        /**
+         * @return true if such identifier exists in this contact list
+         */
+        bool hasIdentifier(const QString& identifier) const;
+
     private:
         void contactListStateChangedCb(uint newState);
         void contactsChangedWithIdCb(const Tp::ContactSubscriptionMap &changes, 
                 const Tp::HandleIdentifierMap &identifiers, const Tp::HandleIdentifierMap &removals);
-        void contactsChangedCb(const Tp::ContactSubscriptionMap& changes, const Tp::UIntList& removals);
+        void contactsChangedCb(const Tp::ContactSubscriptionMap &changes, const Tp::UIntList &removals);
 
-        static std::vector<uint> loadFromFile(const QString& fileName);
+        static QMap<uint, QString> loadFromFile(const QString &dirPath, const QString& fileName);
+        static void saveToFile(const QString &dirPath, const QString &filename, const QMap<uint, QString> &pipedHandles);
 
     private:
         std::atomic_bool loaded;
         ContactList *pipedList;
         Tp::BaseConnectionContactListInterfacePtr contactListIface;
-        QString pathToContactList;
+        QString dirPath;
+        QString fileName;
         QStringList attributeInterfaces;
         Tp::ContactAttributesMap pipedAttrMap;
-        std::set<uint> pipedHandles;
+        QMap<uint, QString> pipedHandles;
 };
 
 #endif

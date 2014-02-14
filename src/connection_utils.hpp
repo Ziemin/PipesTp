@@ -26,6 +26,9 @@ inline void setContactListDbusError(const PipeException<ContactListError> &e, Tp
         case ContactListError::NOT_YET:
             dbusError->set(TP_QT_ERROR_NOT_YET, e.what());
             break;
+        case ContactListError::INVALID_HANDLE:
+            dbusError->set(TP_QT_ERROR_INVALID_HANDLE, e.what());
+            break;
     }
 }
 

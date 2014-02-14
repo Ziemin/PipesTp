@@ -1,6 +1,9 @@
 #include <TelepathyQt/AccountSet>
 #include <TelepathyQt/Constants>
-#include <TelepathyQt/ConnectionManager>
+#include <TelepathyQt/BaseConnectionManager>
+#include <TelepathyQt/PendingReady>
+#include <QEventLoop>
+#include <QObject>
 
 #include "protocol.hpp"
 #include "utils.hpp"
@@ -10,10 +13,13 @@ PipeProtocol::PipeProtocol(
         const QDBusConnection &dbusConnection, 
         const QString &name,
         const PipePtr &pipe,
-        Tp::AccountManagerPtr amp) : 
+        Tp::AccountManagerPtr amp,
+        Tp::BaseConnectionManager* cm)
+        : 
     Tp::BaseProtocol(dbusConnection, name),
     pipe(pipe),
-    amp(amp)
+    amp(amp),
+    cm(cm)
 {
 
     setEnglishName(QLatin1String("Pipe-") + QLatin1String(pipe->name().toStdString().c_str()));
@@ -118,15 +124,46 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
             pDebug() << "Creating piped connection for account: " << ap->objectPath();
 
             Tp::ConnectionPtr pipedConnection = ap->connection();
+            if(pipedConnection.data() == nullptr) {
+                pWarning() << "Connection returned by account is null: ";
+                error->set(TP_QT_ERROR_NOT_AVAILABLE, "Connection is already being piped");
+                return Tp::BaseConnectionPtr();
+            }
+            Tp::PendingReady *pendingReady = pipedConnection->becomeReady(); 
+            { // wait for operation to finish
+                QEventLoop loop;
+                QObject::connect(pendingReady, &Tp::PendingOperation::finished,
+                        &loop, &QEventLoop::quit);
+                loop.exec();
+            }
+
             if(isConnectionPipable(*this, pipedConnection)) {
-                return Tp::BaseConnectionPtr(new PipeConnection(
-                            pipedConnection,
-                            pipe,
-                            QDBusConnection::sessionBus(),
-                            TP_QT_PIPE_CONNECTION_MANAGER_NAME,
-                            name(),
-                            parameters,
-                            { name() + "_" + protocolIt->value<QString>() + "_" + nameIt->value<QString>() }));
+
+                // check if not exists
+                QList<Tp::BaseConnectionPtr> existingCons = cm->connections();
+                for(auto& conPtr: existingCons) {
+                    if(PipeConnectionPtr::dynamicCast(conPtr)->getPipedConnection()->objectPath() 
+                            == pipedConnection->objectPath()) 
+                    {
+                        pWarning() << "Connection is already being piped: " << pipedConnection->objectPath();
+                        error->set(TP_QT_ERROR_NOT_AVAILABLE, "Connection is already being piped");
+                        return Tp::BaseConnectionPtr();
+                    }
+                }
+
+                if(pipedConnection->isReady())
+                    return Tp::BaseConnectionPtr(new PipeConnection(
+                                pipedConnection,
+                                pipe,
+                                QDBusConnection::sessionBus(),
+                                TP_QT_PIPE_CONNECTION_MANAGER_NAME,
+                                name(),
+                                parameters,
+                                { name() + "_" + protocolIt->value<QString>() + "_" + nameIt->value<QString>() }));
+                else {
+                    error->set(TP_QT_ERROR_NETWORK_ERROR, "Piped connection has problems becoming ready: " + pipe->name());
+                    return Tp::BaseConnectionPtr();
+                }
             } else {
                 error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Connection cannot be piped through pipe: " + pipe->name());
                 return Tp::BaseConnectionPtr();

@@ -26,40 +26,32 @@ PipeConnection::PipeConnection(
     setRequestHandlesCallback(Tp::memFun(this, &PipeConnection::requestHandlesCb));
     setInspectHandlesCallback(Tp::memFun(this, &PipeConnection::inspectHandlesCb));
 
+    setSelfHandle(pipedConnection->selfHandle());
+
     // check for interfaces and add if implemented
     QStringList supportedInterfaces;
     bool isContactsSupported = false, isContactListSupported = false;
 
-    // pipedConnection->interfaces(); // it returns gets nothing - WHY? (TODO fix lib)
-    Tp::Client::ConnectionInterface conIface(
-            QDBusConnection::sessionBus(), pipedConnection->busName(), pipedConnection->objectPath());
-    QDBusPendingReply<QStringList> interfacesRep = conIface.GetInterfaces();
-    interfacesRep.waitForFinished();
-
-    if(interfacesRep.isValid()) {
-        for(auto &interface: interfacesRep.value()) {
-            if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACTS) {
-                isContactsSupported = true;
-                supportedInterfaces << interface;
-            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACT_LIST) {
-                supportedInterfaces << interface;
-                isContactListSupported = true;
-            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE) {
-                supportedInterfaces << interface;
-                pDebug() << "Adding simple presence interface to connection piping: " << pipedConnection->objectPath();
-                addSimplePresenceInterface();
-            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_ADDRESSING) {
-                supportedInterfaces << interface;
-                pDebug() << "Adding addressing interface to connection piping: " << pipedConnection->objectPath();
-                addAdressingInterface();
-            } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_REQUESTS) {
-                supportedInterfaces << interface;
-                pDebug() << "Adding requests interface to connection piping: " << pipedConnection->objectPath();
-                addRequestsInterface();
-            }
+    for(const QString &interface: pipedConnection->interfaces()) {
+        if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACTS) {
+            isContactsSupported = true;
+            supportedInterfaces << interface;
+        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_CONTACT_LIST) {
+            supportedInterfaces << interface;
+            isContactListSupported = true;
+        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE) {
+            supportedInterfaces << interface;
+            pDebug() << "Adding simple presence interface to connection piping: " << pipedConnection->objectPath();
+            addSimplePresenceInterface();
+        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_ADDRESSING) {
+            supportedInterfaces << interface;
+            pDebug() << "Adding addressing interface to connection piping: " << pipedConnection->objectPath();
+            addAdressingInterface();
+        } else if(interface == TP_QT_IFACE_CONNECTION_INTERFACE_REQUESTS) {
+            supportedInterfaces << interface;
+            pDebug() << "Adding requests interface to connection piping: " << pipedConnection->objectPath();
+            addRequestsInterface();
         }
-    } else {
-        pWarning() << "Could not get interfaces for connection piping: " << pipedConnection->objectPath();
     }
 
     // Assuming these both interfaces are always implemented at the same time
@@ -84,15 +76,20 @@ PipeConnection::PipeConnection(
 
     if(contactListPtr != nullptr && simplePresencePtr != nullptr) 
         simplePresencePtr->setContactList(contactListPtr.get());
-    if(contactListPtr == nullptr) 
-        setStatus(pipedConnection->status(), Tp::ConnectionStatusReasonNoneSpecified); 
+
+    // lets set status to piped status
+    setStatus(pipedConnection->status(), Tp::ConnectionStatusReasonNoneSpecified); 
 
     connect(pipedConnection.data(), &Tp::Connection::statusChanged,
             this, [this](Tp::ConnectionStatus pipedStatus) {
                 // setting new status to with reason none specified due to incomplete implementation 
                 // of signals in Connection class - TODO
-                if(contactListPtr->isLoaded()) 
-                    setStatus(pipedStatus, Tp::ConnectionStatusReasonNoneSpecified); 
+                setStatus(pipedStatus, Tp::ConnectionStatusReasonNoneSpecified); 
+                pDebug() << "piped connection changed status to: " << pipedStatus;
+                if(pipedStatus == Tp::ConnectionStatus::ConnectionStatusDisconnected) {
+                    pDebug() << "Emitting disconnected";
+                    emit disconnected();
+                }
             });
 }
 
@@ -118,7 +115,6 @@ void PipeConnection::addContactListInterface(const QString& contactListFilename,
     std::async(std::launch::async, 
             [this, contactListIface] {
                 try {
-                    pDebug() << "async";
                     this->contactListPtr->loadContactList();
                     setStatus(pipedConnection->status(), Tp::ConnectionStatusReasonNoneSpecified);
                 } catch(PipeException<ContactListError> &e) { // it failed set it from here
@@ -185,17 +181,33 @@ Tp::BaseChannelPtr PipeConnection::createChannelCb(
     return Tp::BaseChannelPtr();
 }
 
+void PipeConnection::connectCb(Tp::DBusError *error) {
+    // do nothing
+}
+
 Tp::UIntList PipeConnection::requestHandlesCb(uint handleType, const QStringList &identifiers, Tp::DBusError *error) {
-    // TODO implement
+
+    if(handleType == Tp::HandleType::HandleTypeContact) {
+        try {
+            return contactListPtr->getHandlesFor(identifiers);
+        } catch(const ContactListExeption &e) {
+            pWarning() << "Could not return handles for identifiers in: " << objectPath();
+            setContactListDbusError(e, error);
+        }
+    }
     return Tp::UIntList();
 }
 
-void PipeConnection::connectCb(Tp::DBusError *error) {
-
-}
-
 QStringList PipeConnection::inspectHandlesCb(uint handleType, const Tp::UIntList &handles, Tp::DBusError *error) {
-    // TODO implement
+
+    if(handleType == Tp::HandleType::HandleTypeContact) {
+        try {
+            return contactListPtr->getIdentifiersFor(handles);
+        } catch(const ContactListExeption &e) {
+            pWarning() << "Could not return identifiers for handles in: " << objectPath();
+            setContactListDbusError(e, error);
+        }
+    }
     return QStringList();
 }
 

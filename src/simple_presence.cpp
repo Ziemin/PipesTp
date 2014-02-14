@@ -4,6 +4,8 @@
 #include <TelepathyQt/PendingOperation>
 #include <TelepathyQt/PendingVariant>
 
+// in current implementation I assume 
+// that I always get a full list of statuses when signal is emitted
 PipeSimplePresence::PipeSimplePresence(
         SimplePresence *pipedPresence, Tp::BaseConnectionSimplePresenceInterfacePtr presenceIface) 
     : pipedPresence(pipedPresence), presenceIface(presenceIface) 
@@ -48,13 +50,15 @@ void PipeSimplePresence::setPresence(const QString &/* status */, const QString 
     // nothing to do
 }
 
-void PipeSimplePresence::presenceChangedCb(const Tp::SimpleContactPresences &presence) {
+void PipeSimplePresence::presenceChangedCb(const Tp::SimpleContactPresences &presences) {
 
+    Tp::SimpleContactPresences newPresences;
     if(pipeList != nullptr) {
-
-    } else {
-        // simply set presences like in piped connection
-        presenceIface->setPresences(presence);
-    }
+        for(auto it = presences.cbegin(); it != presences.cend(); ++it) {
+            if(pipeList->hasHandle(it.key())) 
+                newPresences[it.key()] = it.value();
+        }
+        presenceIface->setPresences(newPresences);
+    } 
 }
 

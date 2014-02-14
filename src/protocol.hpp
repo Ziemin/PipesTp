@@ -7,6 +7,7 @@
 #include "connection.hpp"
 #include "types.hpp"
 
+namespace Tp { class BaseConnectionManager; }
 
 class PipeProtocol : public Tp::BaseProtocol {
 
@@ -19,7 +20,8 @@ class PipeProtocol : public Tp::BaseProtocol {
                 const QDBusConnection &dbusConnection, 
                 const QString &name,
                 const PipePtr &pipe,
-                Tp::AccountManagerPtr amp);
+                Tp::AccountManagerPtr amp,
+                Tp::BaseConnectionManager* cm);
 
         virtual ~PipeProtocol() = default;
 
@@ -36,6 +38,7 @@ class PipeProtocol : public Tp::BaseProtocol {
 
         PipePtr pipe;
         Tp::AccountManagerPtr amp;
+        Tp::BaseConnectionManager* cm;
 };
 
 #endif
