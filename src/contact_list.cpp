@@ -143,13 +143,12 @@ Tp::ContactAttributesMap PipeContactList::getContactListAttributes(const QString
     return getContactAttributes(handles, interfaces);
 }
 
-int PipeContactList::addToList(const Tp::UIntList &contacts) {
+void PipeContactList::addToList(const Tp::UIntList &contacts) {
     if(!isLoaded()) 
         throw PipeException<ContactListError>("Contact list is not loaded", ContactListError::NOT_LOADED);
 
     Tp::ContactSubscriptionMap subChangeMap;
     Tp::HandleIdentifierMap newIdentifiers;
-    int added = 0; 
     Tp::ContactSubscriptions subs;
     for(uint handle: contacts) {
         pDebug() << "Adding to contact list: " << handle;
@@ -172,7 +171,6 @@ int PipeContactList::addToList(const Tp::UIntList &contacts) {
                 newIdentifiers[handle] = *hIt;
                 pipedContacts.insert(*hIt);
                 subChangeMap[handle] = subs;
-                added++;
             }
         } else {
             pWarning() << "No such handle: " << handle;
@@ -180,13 +178,29 @@ int PipeContactList::addToList(const Tp::UIntList &contacts) {
         }
     }
 
-    if(added) {
-        pDebug() << "Added: " << added << " contacts to list";
-        contactListIface->contactsChangedWithID(subChangeMap, newIdentifiers, Tp::HandleIdentifierMap());
-        saveToFile(dirPath, fileName, pipedContacts);
+    contactListIface->contactsChangedWithID(subChangeMap, newIdentifiers, Tp::HandleIdentifierMap());
+    saveToFile(dirPath, fileName, pipedContacts);
+}
+
+void PipeContactList::remove(const Tp::UIntList &contacts) {
+
+    // first, check if all handles are piped
+    for(uint handle: contacts) {
+        auto it = idMap.find(handle);
+        if(it == idMap.end() || !pipedContacts.contains(*it)) 
+            throw ContactListExeption("No such handle in list", ContactListError::INVALID_HANDLE);
     }
 
-    return added;
+    Tp::HandleIdentifierMap removed;
+    for(uint handle: contacts) {
+        const QString& id = idMap[handle];
+        removed[handle] = id;
+        pipedContacts.remove(id);
+        pDebug() << "Removing contact: " << id;
+    }
+
+    contactListIface->contactsChangedWithID(Tp::ContactSubscriptionMap(), Tp::HandleIdentifierMap(), removed);
+    saveToFile(dirPath, fileName, pipedContacts);
 }
 
 QSet<QString> PipeContactList::loadFromFile(const QString &dirPath, const QString &fileName) {
@@ -233,6 +247,8 @@ void PipeContactList::contactsChangedWithIdCb(const Tp::ContactSubscriptionMap &
             newRemovals[it.key()] = it.value();
             pipedContacts.erase(pIt);
         }
+        idMap.remove(it.key());
+        revIdMap.remove(it.value());
     }
 
     Tp::HandleIdentifierMap changeIdentifiers;

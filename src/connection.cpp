@@ -115,6 +115,7 @@ void PipeConnection::addContactListInterface(const QString& contactListFilename,
     Tp::BaseConnectionContactListInterfacePtr contactListIface = Tp::BaseConnectionContactListInterface::create();
     contactListIface->setGetContactListAttributesCallback(Tp::memFun(this, &PipeConnection::getContactListAttributesCb));
     contactListIface->setRequestSubscriptionCallback(Tp::memFun(this, &PipeConnection::requestSubscriptionCb));
+    contactListIface->setRemoveContactsCallback(Tp::memFun(this, &PipeConnection::removeContactsCb));
 
     ContactList *pipedList = pipedConnection->interface<ContactList>();
 
@@ -259,6 +260,19 @@ void PipeConnection::requestSubscriptionCb(const Tp::UIntList &contacts, const Q
         contactListPtr->addToList(contacts);
     } catch(PipeException<ContactListError> &e) {
         pWarning() << "Exception happened while requesting subscription for connection: " 
+            << objectPath() << " with message: " << e.what();
+        setContactListDbusError(e, error);
+    }
+}
+
+void PipeConnection::removeContactsCb(const Tp::UIntList &contacts, Tp::DBusError *error) {
+
+    try {
+        // try again if failed previously
+        if(!contactListPtr->isLoaded()) contactListPtr->loadContactList();
+        contactListPtr->remove(contacts);
+    } catch(PipeException<ContactListError> &e) {
+        pWarning() << "Exception happened while removing contacts for connection: " 
             << objectPath() << " with message: " << e.what();
         setContactListDbusError(e, error);
     }

@@ -62,6 +62,8 @@ class PipeConnection : public Tp::BaseConnection {
 
         void requestSubscriptionCb(const Tp::UIntList &contacts, const QString &message, Tp::DBusError *error);
 
+        void removeContactsCb(const Tp::UIntList &contacts, Tp::DBusError *error);
+
         void getContactsByVCardFieldCb(
                 const QString &field, const QStringList &addresses, const QStringList &interfaces,
                 Tp::AddressingNormalizationMap &addressingNormalizationMap, 

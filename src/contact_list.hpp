@@ -72,10 +72,18 @@ class PipeContactList : public QObject {
          * Adds to contact list contacts with given ids. If a contact is not in the piped list it 
          * will not be added.
          *
-         * @throws ContactListException when contact list has not been loaded
-         * @return number of added contacts
+         * @throws ContactListException when contact list has not been loaded or one of given 
+         *          handles is not present in contact list
          */
-        int addToList(const Tp::UIntList &contacts);
+        void addToList(const Tp::UIntList &contacts);
+
+        /**
+         * Removes contacts with given handles from list
+         *
+         * @throws ContactListException when contact list has not been loaded or one of given 
+         *          handles is not present in contact list
+         */
+        void remove(const Tp::UIntList &contacts);
 
         /**
          * @return piped handles for given identifiers
