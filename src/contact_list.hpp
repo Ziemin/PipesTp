@@ -90,11 +90,11 @@ class PipeContactList : public QObject {
         QStringList getIdentifiersFor(const Tp::UIntList &handles) const;
 
         /**
-         * @return true if such handle exists in this contact list
+         * @return true if such handle exists in this contact list (is subscribed)
          */
         bool hasHandle(uint handle) const;
         /**
-         * @return true if such identifier exists in this contact list
+         * @return true if such identifier exists in this contact list (is subsribed)
          */
         bool hasIdentifier(const QString& identifier) const;
 
@@ -104,8 +104,8 @@ class PipeContactList : public QObject {
                 const Tp::HandleIdentifierMap &identifiers, const Tp::HandleIdentifierMap &removals);
         void contactsChangedCb(const Tp::ContactSubscriptionMap &changes, const Tp::UIntList &removals);
 
-        static QMap<uint, QString> loadFromFile(const QString &dirPath, const QString& fileName);
-        static void saveToFile(const QString &dirPath, const QString &filename, const QMap<uint, QString> &pipedHandles);
+        static QSet<QString> loadFromFile(const QString &dirPath, const QString& fileName);
+        static void saveToFile(const QString &dirPath, const QString &filename, const QSet<QString> &pipedHandles);
 
     private:
         std::atomic_bool loaded;
@@ -115,7 +115,9 @@ class PipeContactList : public QObject {
         QString fileName;
         QStringList attributeInterfaces;
         Tp::ContactAttributesMap pipedAttrMap;
-        QMap<uint, QString> pipedHandles;
+        QMap<uint, QString> idMap;
+        QMap<QString, uint> revIdMap;
+        QSet<QString> pipedContacts;
 };
 
 #endif

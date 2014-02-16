@@ -1,0 +1,4 @@
+- chenge QSharedPtr to unique_ptr wherever it is possible
+- add aliases to contacts with protocol appended
+- filter using interfaces in contact list in get attributes
+- add remove contacts to contact list (telepathy qt)

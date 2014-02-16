@@ -50,12 +50,20 @@ void PipeContactList::loadContactList() {
 
     if(attrMapRep.isValid()) {
         pipedAttrMap = attrMapRep.value();
+        for(auto it = pipedAttrMap.constBegin(); it != pipedAttrMap.constEnd(); ++it) {
+            auto idIt = (*it).find(QString(TP_QT_IFACE_CONNECTION) + "/contact-id");
+            if(idIt != (*it).end()) {
+                idMap[it.key()] = idIt->toString();
+                revIdMap[idIt->toString()] = it.key();
+            } else {
+                pWarning() << "No id for handle: " << it.key();
+            }
+        }
 
-        QMap<uint, QString> serializedHandles = loadFromFile(dirPath, fileName);
-        for(auto it = serializedHandles.constBegin(); it != serializedHandles.constEnd(); ++it) {
-            if(pipedAttrMap.contains(it.key())) pipedHandles[it.key()] = it.value();
-            else pWarning() << "Could not find handle to pipe in contact list for: (" << it.key()
-                << ", " << it.value() << ")";
+        QSet<QString> serializedHandles = loadFromFile(dirPath, fileName);
+        for(const QString& id: serializedHandles) {
+            if(revIdMap.contains(id)) pipedContacts.insert(id);
+            else pWarning() << "Could not find handle to pipe in contact list for id: (" << id << ")";
         }
 
         loaded = true;
@@ -71,7 +79,7 @@ Tp::UIntList PipeContactList::getHandlesFor(const QStringList &identifiers) cons
     Tp::UIntList handles;
     for(const QString &id: identifiers) {
         bool found = false;
-        for(auto it = pipedHandles.constBegin(); it != pipedHandles.constEnd(); ++it) {
+        for(auto it = idMap.constBegin(); it != idMap.constEnd(); ++it) {
             if(it.value() == id) {
                 found = true;
                 handles.append(it.key());
@@ -87,8 +95,8 @@ QStringList PipeContactList::getIdentifiersFor(const Tp::UIntList &handles) cons
 
     QStringList identifiers;
     for(uint h: handles) {
-        auto it = pipedHandles.find(h);
-        if(it == pipedHandles.end())
+        auto it = idMap.find(h);
+        if(it == idMap.end())
             throw ContactListExeption(
                     "No such handle in contact list: " + std::to_string(h), ContactListError::INVALID_HANDLE);
 
@@ -98,19 +106,19 @@ QStringList PipeContactList::getIdentifiersFor(const Tp::UIntList &handles) cons
 }
 
 bool PipeContactList::hasHandle(uint handle) const {
-    return pipedHandles.contains(handle);
+    if(idMap.contains(handle)) 
+        return pipedContacts.contains(idMap[handle]);
+    return false;
 }
 
 bool PipeContactList::hasIdentifier(const QString& identifier) const {
-    for(const QString& s: pipedHandles) 
-        if(s == identifier) return true;
-
-    return false;
+    return pipedContacts.contains(identifier);
 }
 
 Tp::ContactAttributesMap PipeContactList::getContactAttributes(
             const Tp::UIntList &handles, const QStringList &/* interfaces */) 
 {
+    // TODO filter using interfaces
     if(!isLoaded()) 
         throw PipeException<ContactListError>("Contact list is not loaded", ContactListError::NOT_LOADED);
 
@@ -130,7 +138,7 @@ Tp::ContactAttributesMap PipeContactList::getContactListAttributes(const QString
         throw PipeException<ContactListError>("Contact list is not loaded", ContactListError::NOT_LOADED);
 
     Tp::UIntList handles;
-    for(uint p: pipedHandles.keys()) handles.append(p);
+    for(const QString& p: pipedContacts) handles.append(revIdMap[p]);
 
     return getContactAttributes(handles, interfaces);
 }
@@ -143,8 +151,9 @@ int PipeContactList::addToList(const Tp::UIntList &contacts) {
     Tp::HandleIdentifierMap newIdentifiers;
     int added = 0; 
     Tp::ContactSubscriptions subs;
-    for(uint handle: contacts) 
-        if(!pipedAttrMap.contains(handle)) {
+    for(uint handle: contacts) {
+        pDebug() << "Adding to contact list: " << handle;
+        if(pipedAttrMap.contains(handle)) {
 
             auto it = pipedAttrMap[handle].find(QString(TP_QT_IFACE_CONNECTION_INTERFACE_CONTACT_LIST) + "/subscribe");
             if(it != pipedAttrMap[handle].end()) subs.subscribe = it.value().toUInt();
@@ -158,27 +167,31 @@ int PipeContactList::addToList(const Tp::UIntList &contacts) {
             if(it != pipedAttrMap[handle].end()) subs.publishRequest = it.value().toString();
             else subs.publishRequest = "";
 
-            it = pipedAttrMap[handle].find(QString(TP_QT_IFACE_CONNECTION) + "/contact-id");
-
-            if(it != pipedAttrMap[handle].end()) {
-                newIdentifiers[handle] = it.value().toString();
-                pipedHandles[handle] = it.value().toString();
+            auto hIt = idMap.find(handle);
+            if(hIt != idMap.end()) {
+                newIdentifiers[handle] = *hIt;
+                pipedContacts.insert(*hIt);
                 subChangeMap[handle] = subs;
                 added++;
             }
+        } else {
+            pWarning() << "No such handle: " << handle;
+            throw ContactListExeption("No such handle: " + std::to_string(handle), ContactListError::INVALID_HANDLE);
         }
+    }
 
     if(added) {
+        pDebug() << "Added: " << added << " contacts to list";
         contactListIface->contactsChangedWithID(subChangeMap, newIdentifiers, Tp::HandleIdentifierMap());
-        saveToFile(dirPath, fileName, pipedHandles);
+        saveToFile(dirPath, fileName, pipedContacts);
     }
 
     return added;
 }
 
-QMap<uint, QString> PipeContactList::loadFromFile(const QString &dirPath, const QString &fileName) {
+QSet<QString> PipeContactList::loadFromFile(const QString &dirPath, const QString &fileName) {
 
-    QMap<uint, QString> deserialized;
+    QSet<QString> deserialized;
     QFile inFile(dirPath + "/" + fileName);
     if(!inFile.exists()) return deserialized;
 
@@ -189,7 +202,7 @@ QMap<uint, QString> PipeContactList::loadFromFile(const QString &dirPath, const 
     return deserialized;
 }
 
-void PipeContactList::saveToFile(const QString &dirPath, const QString &filename, const QMap<uint, QString> &pipedHandles) {
+void PipeContactList::saveToFile(const QString &dirPath, const QString &filename, const QSet<QString> &pipedHandles) {
 
     QDir dir(dirPath);
     if(!dir.exists()) {
@@ -215,17 +228,17 @@ void PipeContactList::contactsChangedWithIdCb(const Tp::ContactSubscriptionMap &
 {
     Tp::HandleIdentifierMap newRemovals;
     for(auto it = removals.constBegin(); it != removals.constEnd(); ++it) {
-        auto pIt = pipedHandles.find(it.key());
-        if(pIt != pipedHandles.end()) {
+        auto pIt = pipedContacts.find(it.value());
+        if(pIt != pipedContacts.end()) {
             newRemovals[it.key()] = it.value();
-            pipedHandles.erase(pIt);
+            pipedContacts.erase(pIt);
         }
     }
 
     Tp::HandleIdentifierMap changeIdentifiers;
     Tp::ContactSubscriptionMap newChanges;
     for(auto it = identifiers.constBegin(); it != identifiers.constEnd(); ++it) {
-        if(pipedHandles.find(it.key()) != pipedHandles.end()) {
+        if(pipedContacts.find(it.value()) != pipedContacts.end()) {
             changeIdentifiers[it.key()] = it.value();
             newChanges[it.key()] = changes[it.key()];
         }
@@ -241,7 +254,7 @@ void PipeContactList::contactsChangedWithIdCb(const Tp::ContactSubscriptionMap &
     if(!(newChanges.empty() && changeIdentifiers.empty() && newRemovals.empty())) {
         contactListIface->contactsChangedWithID(newChanges, changeIdentifiers, newRemovals);
         if(!newRemovals.empty()) 
-            saveToFile(dirPath, fileName, pipedHandles);
+            saveToFile(dirPath, fileName, pipedContacts);
     }
 }
 

@@ -84,12 +84,20 @@ PipeConnection::PipeConnection(
             this, [this](Tp::ConnectionStatus pipedStatus) {
                 // setting new status to with reason none specified due to incomplete implementation 
                 // of signals in Connection class - TODO
-                setStatus(pipedStatus, Tp::ConnectionStatusReasonNoneSpecified); 
                 pDebug() << "piped connection changed status to: " << pipedStatus;
+                setStatus(pipedStatus, Tp::ConnectionStatusReasonNoneSpecified); 
                 if(pipedStatus == Tp::ConnectionStatus::ConnectionStatusDisconnected) {
-                    pDebug() << "Emitting disconnected";
                     emit disconnected();
                 }
+            });
+
+    // connect to invalidated proxy signal
+    connect(pipedConnection.data(), &Tp::Connection::invalidated,
+            this, [this](Tp::DBusProxy* /* proxy */, const QString &errorName, const QString &errorMessage) {
+                pDebug() << "piped connection proxy has been invalidated: error - > " << errorName
+                         << " message - > " << errorMessage;
+                setStatus(Tp::ConnectionStatus::ConnectionStatusDisconnected, Tp::ConnectionStatusReasonNoneSpecified); 
+                emit disconnected();
             });
 }
 
