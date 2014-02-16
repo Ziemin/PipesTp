@@ -45,6 +45,10 @@ class PipeConnection : public Tp::BaseConnection {
 
     private:
 
+        bool checkChannelType(const QString &channelType) const;
+        bool checkHandleType(uint targetHandleType) const;
+        bool checkTargetHandle(uint targetHandle) const;
+
         Tp::BaseChannelPtr createChannelCb(
                 const QString &channelType, uint targetHandleType, uint targetHandle, Tp::DBusError *error);
 
@@ -85,6 +89,7 @@ class PipeConnection : public Tp::BaseConnection {
         void addSimplePresenceInterface();
         void addAdressingInterface();
         void addRequestsInterface();
+        bool canPipeChannel(const Tp::Channel &channel) const;
 
     private:
 

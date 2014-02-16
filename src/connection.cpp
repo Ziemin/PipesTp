@@ -172,22 +172,95 @@ Tp::ConnectionPtr PipeConnection::getPipedConnection() const {
     return pipedConnection;
 }
 
-bool PipeConnection::checkChannel(const Tp::Channel &channel) const {
-    // TODO implement
+bool PipeConnection::canPipeChannel(const Tp::Channel &channel) const {
+    Tp::RequestableChannelClassList reqChanList = pipe->requestableChannelClasses();
+    for(auto& cc: reqChanList) {
+        if(cc.fixedProperties["org.freedesktop.Telepathy.Channel.ChannelType"].toString() == channel.channelType())
+            return true;
+    }
     return false;
+}
+
+bool PipeConnection::checkChannelType(const QString &channelType) const {
+    Tp::RequestableChannelClassList reqChanList = pipe->requestableChannelClasses();
+    for(auto& cc: reqChanList) {
+        if(cc.fixedProperties["org.freedesktop.Telepathy.Channel.ChannelType"].toString() == channelType)
+            return true;
+    }
+    return false;
+}
+
+bool PipeConnection::checkHandleType(uint targetHandleType) const {
+    // check if channel is directed to one of piped contacts
+    // for now only simple contact interfaces are implemented
+    // TODO group interface
+    return targetHandleType == Tp::HandleTypeContact;
+}
+
+bool PipeConnection::checkTargetHandle(uint targetHandle) const {
+    return (contactListPtr && contactListPtr->hasHandle(targetHandle));
+}
+
+bool PipeConnection::checkChannel(const Tp::Channel &channel) const {
+    if(!checkChannelType(channel.channelType())) return false;
+    if(!checkHandleType(channel.targetHandleType())) return false;
+    return checkTargetHandle(channel.targetHandle());
 }
 
 Tp::ChannelPtr PipeConnection::pipeChannel(const Tp::Channel &channel) const {
     // TODO implement
-    return Tp::ChannelPtr();
+    // for now lets not use pipe - just return the same guy
+    return Tp::Channel::create(channel.connection(), channel.objectPath(), channel.immutableProperties());
 }
 
 
 Tp::BaseChannelPtr PipeConnection::createChannelCb(
         const QString &channelType, uint targetHandleType, uint targetHandle, Tp::DBusError *error) 
 {
-    // TODO implement 
-    return Tp::BaseChannelPtr();
+    pDebug() << "Creating channel for: channelType -> " << channelType 
+        << " targetHandleType -> " << targetHandleType << " targetHandle -> " << targetHandle;
+
+    if(!checkChannelType(channelType)) {
+        error->set(TP_QT_ERROR_INVALID_ARGUMENT, "Wrong channel type for this connection");
+        return Tp::BaseChannelPtr();
+    }
+    if(!checkHandleType(targetHandleType)) {
+        error->set(TP_QT_ERROR_NOT_IMPLEMENTED, "This handle type is not implemented in this connection");
+        return Tp::BaseChannelPtr();
+    }
+    if(!checkTargetHandle(targetHandle)) {
+        error->set(TP_QT_ERROR_INVALID_HANDLE, "No such handle in this connection");
+        return Tp::BaseChannelPtr();
+    }
+
+    if(this->interface(TP_QT_IFACE_CONNECTION_INTERFACE_REQUESTS)) {
+        pDebug() << "Getting channel from piped connection";
+        Tp::Client::ConnectionInterfaceRequestsInterface *reqIface = 
+            pipedConnection->interface<Tp::Client::ConnectionInterfaceRequestsInterface>();
+
+        QVariantMap request;
+        request[QString(TP_QT_IFACE_CHANNEL)+ QString(".ChannelType")] = QVariant(channelType);
+        request[QString(TP_QT_IFACE_CHANNEL)+ QString(".TargetHandle")] = QVariant(targetHandle);
+        request[QString(TP_QT_IFACE_CHANNEL)+ QString(".TargetHandleType")] = QVariant(targetHandleType);
+
+        QDBusPendingReply<QDBusObjectPath, QVariantMap> newChanRep = reqIface->CreateChannel(request);
+
+        newChanRep.waitForFinished();
+        if(newChanRep.isValid()) {
+            QDBusObjectPath objectPath = newChanRep.argumentAt<0>();
+            QVariantMap props = newChanRep.argumentAt<1>();
+            pDebug() << "Creating proxy for channel at: " << objectPath.path();
+            // TODO proxy class
+            return Tp::BaseChannelPtr();
+        } else {
+            pWarning() << "Invalid reply when creating channel: " << newChanRep.error();
+            error->set(newChanRep.error().name(), newChanRep.error().message());
+            return Tp::BaseChannelPtr();
+        }
+    } else {
+        error->set(TP_QT_ERROR_NOT_IMPLEMENTED, "Requests interface is not implemented");
+        return Tp::BaseChannelPtr();
+    }
 }
 
 void PipeConnection::connectCb(Tp::DBusError *error) {
