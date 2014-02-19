@@ -2,10 +2,13 @@
 #include "connection_utils.hpp"
 #include "utils.hpp"
 #include "simple_presence.hpp"
+#include "proxy_channel.hpp"
 
 #include <TelepathyQt/PendingVariant>
+#include <TelepathyQt/PendingReady>
 #include <TelepathyQt/Connection>
 #include <future>
+#include <QEventLoop>
 
 PipeConnection::PipeConnection(
         const Tp::ConnectionPtr &pipedConnection,
@@ -172,15 +175,6 @@ Tp::ConnectionPtr PipeConnection::getPipedConnection() const {
     return pipedConnection;
 }
 
-bool PipeConnection::canPipeChannel(const Tp::Channel &channel) const {
-    Tp::RequestableChannelClassList reqChanList = pipe->requestableChannelClasses();
-    for(auto& cc: reqChanList) {
-        if(cc.fixedProperties["org.freedesktop.Telepathy.Channel.ChannelType"].toString() == channel.channelType())
-            return true;
-    }
-    return false;
-}
-
 bool PipeConnection::checkChannelType(const QString &channelType) const {
     Tp::RequestableChannelClassList reqChanList = pipe->requestableChannelClasses();
     for(auto& cc: reqChanList) {
@@ -207,10 +201,10 @@ bool PipeConnection::checkChannel(const Tp::Channel &channel) const {
     return checkTargetHandle(channel.targetHandle());
 }
 
-Tp::ChannelPtr PipeConnection::pipeChannel(const Tp::Channel &channel) const {
+Tp::BaseChannelPtr PipeConnection::pipeChannel(Tp::ChannelPtr channel) {
     // TODO implement
     // for now lets not use pipe - just return the same guy
-    return Tp::Channel::create(channel.connection(), channel.objectPath(), channel.immutableProperties());
+    return Tp::BaseChannelPtr::dynamicCast(PipeProxyChannel::create(this, channel));
 }
 
 
@@ -238,21 +232,63 @@ Tp::BaseChannelPtr PipeConnection::createChannelCb(
         Tp::Client::ConnectionInterfaceRequestsInterface *reqIface = 
             pipedConnection->interface<Tp::Client::ConnectionInterfaceRequestsInterface>();
 
+        QString channelTypeProp = QString(TP_QT_IFACE_CHANNEL)+ QString(".ChannelType");
+        QString targetHandleProp = QString(TP_QT_IFACE_CHANNEL)+ QString(".TargetHandle");
+        QString targetHandleTypeProp = QString(TP_QT_IFACE_CHANNEL)+ QString(".TargetHandleType");
+
+        // first check if such channel already exists, if not create it
+        Tp::PendingVariant *pendingChans = reqIface->requestPropertyChannels();
+        { // wait for operation to finish -- damn async methods!!!
+            QEventLoop loop;
+            QObject::connect(pendingChans, &Tp::PendingOperation::finished,
+                    &loop, &QEventLoop::quit);
+            loop.exec();
+        }
+        if(pendingChans->isValid()) {
+            QDBusArgument dbusArg = pendingChans->result().value<QDBusArgument>();
+            Tp::ChannelDetailsList chans;
+            dbusArg >> chans;
+
+            for(const Tp::ChannelDetails &cd: chans) {
+                // found our channel
+                if(cd.properties[channelTypeProp].toString() == channelType &&
+                        cd.properties[targetHandleProp].toUInt() == targetHandle &&
+                        cd.properties[targetHandleTypeProp].toUInt() == targetHandleType) 
+                {
+                    Tp::ChannelPtr chan = Tp::Channel::create(pipedConnection, cd.channel.path(), cd.properties);
+                    Tp::PendingReady *pendingReady = chan->becomeReady();
+                    { // wait for channel to become ready
+                        QEventLoop loop;
+                        QObject::connect(pendingReady, &Tp::PendingOperation::finished,
+                                &loop, &QEventLoop::quit);
+                        loop.exec();
+                    }
+                    return pipeChannel(chan);
+                }
+            }
+        } else {
+            pWarning() << "Invalid reply when getting list of channels: " << pendingChans->errorMessage();
+            error->set(pendingChans->errorName(), pendingChans->errorMessage());
+            return Tp::BaseChannelPtr();
+        }
+
+        // have to create a new channel for piped connection
         QVariantMap request;
-        request[QString(TP_QT_IFACE_CHANNEL)+ QString(".ChannelType")] = QVariant(channelType);
-        request[QString(TP_QT_IFACE_CHANNEL)+ QString(".TargetHandle")] = QVariant(targetHandle);
-        request[QString(TP_QT_IFACE_CHANNEL)+ QString(".TargetHandleType")] = QVariant(targetHandleType);
+        request[channelTypeProp] = QVariant(channelType);
+        request[targetHandleProp] = QVariant(targetHandle);
+        request[targetHandleTypeProp] = QVariant(targetHandleType);
 
         QDBusPendingReply<QDBusObjectPath, QVariantMap> newChanRep = reqIface->CreateChannel(request);
 
         newChanRep.waitForFinished();
         if(newChanRep.isValid()) {
+
             QDBusObjectPath objectPath = newChanRep.argumentAt<0>();
             QVariantMap props = newChanRep.argumentAt<1>();
             pDebug() << "Creating proxy for channel at: " << objectPath.path();
-            // TODO proxy class
-            return Tp::BaseChannelPtr();
+            return pipeChannel(Tp::Channel::create(pipedConnection, objectPath.path(), props));
         } else {
+
             pWarning() << "Invalid reply when creating channel: " << newChanRep.error();
             error->set(newChanRep.error().name(), newChanRep.error().message());
             return Tp::BaseChannelPtr();
@@ -263,7 +299,7 @@ Tp::BaseChannelPtr PipeConnection::createChannelCb(
     }
 }
 
-void PipeConnection::connectCb(Tp::DBusError *error) {
+void PipeConnection::connectCb(Tp::DBusError * /* error */) {
     // do nothing
 }
 
@@ -376,5 +412,6 @@ uint PipeConnection::setPresenceCb(const QString &status, const QString &statusM
             << objectPath() << " with message: " << e.what();
         setSimplePresenceDbusError(e, error);
     }
+    return selfHandle();
 }
 

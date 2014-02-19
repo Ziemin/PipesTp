@@ -27,6 +27,7 @@ set(PipesTp_SRCS
     contact_list.cpp
     simple_presence.cpp
     connection.cpp
+    proxy_channel.cpp
     connection_manager.cpp
     approver.cpp
     protocol.cpp

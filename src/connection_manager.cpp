@@ -6,6 +6,8 @@
 #include <TelepathyQt/RequestableChannelClassSpecList>
 #include <TelepathyQt/ChannelClassSpecList>
 #include <TelepathyQt/ChannelDispatcher>
+#include <TelepathyQt/ReferencedHandles>
+#include <TelepathyQt/PendingReady>
 #include <QDebug>
 #include <QtDBus>
 #include <vector>
@@ -68,8 +70,29 @@ void pipeChannels(PipeConnectionPtr pipeCon, std::vector<Tp::ChannelPtr> channel
     Tp::ObjectPathList pathsToNewChannels;
     for(auto &chan: channels) {
         try {
+
+            Tp::PendingReady *pendingReady = chan->becomeReady(Tp::Features() << Tp::Channel::FeatureCore); 
+            { // wait for operation to finish
+                QEventLoop loop;
+                QObject::connect(pendingReady, &Tp::PendingOperation::finished,
+                        &loop, &QEventLoop::quit);
+                loop.exec();
+            }
             pDebug() << "Piping channel: " << chan->objectPath();
-            pathsToNewChannels << QDBusObjectPath(pipeCon->pipeChannel(*chan.data())->objectPath());
+            Tp::DBusError dbError;
+            QDBusObjectPath newChan(pipeCon->createChannel(
+                        chan->channelType(),
+                        chan->targetHandleType(),
+                        chan->targetHandle(), 
+                        chan->initiatorContact()->handle().front(),
+                        false,
+                        &dbError)->objectPath());
+            if(!dbError.isValid()) {
+                pathsToNewChannels << newChan;
+            } else {
+                pWarning() << "Could not pipe: " << chan->objectPath();
+            }
+
         } catch(...) {
             pWarning() << "Could not pipe: " << chan->objectPath();
         }

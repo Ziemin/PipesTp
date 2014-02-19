@@ -37,13 +37,13 @@ class PipeConnection : public Tp::BaseConnection {
          * Check if given channel has to be piped through this connection
          */
         bool checkChannel(const Tp::Channel &channel) const;
+
+    private:
         /**
          * @param channel to be piped
          * @returns piped channel
          */
-        Tp::ChannelPtr pipeChannel(const Tp::Channel &channel) const;
-
-    private:
+        Tp::BaseChannelPtr pipeChannel(const Tp::ChannelPtr channel);
 
         bool checkChannelType(const QString &channelType) const;
         bool checkHandleType(uint targetHandleType) const;
@@ -89,7 +89,6 @@ class PipeConnection : public Tp::BaseConnection {
         void addSimplePresenceInterface();
         void addAdressingInterface();
         void addRequestsInterface();
-        bool canPipeChannel(const Tp::Channel &channel) const;
 
     private:
 

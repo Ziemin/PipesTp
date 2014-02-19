@@ -129,7 +129,7 @@ Tp::BaseConnectionPtr PipeProtocol::createConnection(const QVariantMap &paramete
                 error->set(TP_QT_ERROR_NOT_AVAILABLE, "Connection is already being piped");
                 return Tp::BaseConnectionPtr();
             }
-            Tp::PendingReady *pendingReady = pipedConnection->becomeReady(); 
+            Tp::PendingReady *pendingReady = pipedConnection->becomeReady(Tp::Connection::FeatureCore); 
             { // wait for operation to finish
                 QEventLoop loop;
                 QObject::connect(pendingReady, &Tp::PendingOperation::finished,
