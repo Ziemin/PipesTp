@@ -196,6 +196,10 @@ bool PipeConnection::checkTargetHandle(uint targetHandle) const {
 }
 
 bool PipeConnection::checkChannel(const Tp::Channel &channel) const {
+    pDebug() << "Checking channel: type -> " << channel.channelType()
+        << " handleType -> " << channel.targetHandleType()
+        << " targetHandle -> " << channel.targetHandleType();
+
     if(!checkChannelType(channel.channelType())) return false;
     if(!checkHandleType(channel.targetHandleType())) return false;
     return checkTargetHandle(channel.targetHandle());

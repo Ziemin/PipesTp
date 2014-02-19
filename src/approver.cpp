@@ -21,6 +21,7 @@ void PipeApprover::addDispatchOperation(const Tp::MethodInvocationContextPtr<> &
             dispatchOperation->connection(),
             dispatchOperation->channels());
 
+    pDebug() << "New channels to check at approver";
     if(handler) {
         pDebug() << "Claiming ownership of some channels from: \n"
             << "    Connection: " << dispatchOperation->connection()->busName() 

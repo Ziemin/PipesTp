@@ -114,7 +114,8 @@ void pipeChannels(PipeConnectionPtr pipeCon, std::vector<Tp::ChannelPtr> channel
             pWarning() << "Could not delegate: " << it.key().path() << " due to: " << it.value().errorMessage;
         }
     } else {
-        pWarning() << "Could not get not delegated reply: " << notDelegatedRep.error().message();
+        pWarning() << "Could not get delegated reply: " << 
+            notDelegatedRep.error().name() << " -> " << notDelegatedRep.error().message();
     }
 }
 
@@ -193,6 +194,14 @@ CaseHandler<void> PipeConnectionManager::checkNewChannel(
             std::vector<Tp::ChannelPtr> chansToPipe;
             // now check if specific channels for contacts are desired
             for(auto &chan: channels) {
+
+                Tp::PendingReady *pendingReady = chan->becomeReady();
+                { // wait for channel to become ready
+                    QEventLoop loop;
+                    QObject::connect(pendingReady, &Tp::PendingOperation::finished,
+                            &loop, &QEventLoop::quit);
+                    loop.exec();
+                }
                 if(pipeCon->checkChannel(*chan.data())) chansToPipe.push_back(chan);
             }
             if(chansToPipe.empty()) return CaseHandler<void>();
