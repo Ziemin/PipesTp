@@ -210,10 +210,16 @@ bool PipeConnection::checkChannel(const Tp::Channel &channel) const {
 Tp::BaseChannelPtr PipeConnection::pipeChannel(Tp::ChannelPtr channel, Tp::DBusError *error) {
 
     QDBusPendingReply<QDBusObjectPath> pipeRep = pipe->createPipeChannel(QDBusObjectPath(channel->objectPath()));
+    pipeRep.waitForFinished();
     if(pipeRep.isValid()) {
         // getting object paths and bus names for connection and channel
         QString chanObjectPath = pipeRep.value().path();
-        uint lastSlash = chanObjectPath.lastIndexOf("/", 0);
+        if(chanObjectPath.isEmpty()) {
+            error->set(TP_QT_ERROR_NOT_AVAILABLE, "Pipe did not return any channel");
+            return Tp::BaseChannelPtr();
+        }
+
+        uint lastSlash = chanObjectPath.lastIndexOf('/');
         QString conObjectPath = chanObjectPath.left(lastSlash);
         QString conBusName = conObjectPath.right(conObjectPath.length()-1);
         conBusName.replace("/", ".");
@@ -228,9 +234,17 @@ Tp::BaseChannelPtr PipeConnection::pipeChannel(Tp::ChannelPtr channel, Tp::DBusE
                 Tp::ContactFactory::create());
 
         Tp::ChannelPtr pipedChannel = Tp::Channel::create(pipedCon, chanObjectPath, QVariantMap());
+        Tp::PendingReady *pendingReady = pipedChannel->becomeReady(Tp::Channel::FeatureCore);
+        { // wait for channel to become ready
+            QEventLoop loop;
+            QObject::connect(pendingReady, &Tp::PendingOperation::finished,
+                    &loop, &QEventLoop::quit);
+            loop.exec();
+        }
 
         return Tp::BaseChannelPtr::dynamicCast(PipeProxyChannel::create(this, pipedChannel));
     } else {
+        pWarning() << "Invalid reply from pipe: " << pipeRep.error().name() << " -> " << pipeRep.error().message();
         error->set(pipeRep.error().name(), pipeRep.error().message());
         return Tp::BaseChannelPtr();
     }
