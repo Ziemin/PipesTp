@@ -43,7 +43,7 @@ class PipeConnection : public Tp::BaseConnection {
          * @param channel to be piped
          * @returns piped channel
          */
-        Tp::BaseChannelPtr pipeChannel(const Tp::ChannelPtr channel);
+        Tp::BaseChannelPtr pipeChannel(const Tp::ChannelPtr channel, Tp::DBusError *error);
 
         bool checkChannelType(const QString &channelType) const;
         bool checkHandleType(uint targetHandleType) const;

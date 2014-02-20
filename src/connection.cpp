@@ -7,6 +7,8 @@
 #include <TelepathyQt/PendingVariant>
 #include <TelepathyQt/PendingReady>
 #include <TelepathyQt/Connection>
+#include <TelepathyQt/ChannelFactory>
+#include <TelepathyQt/ContactFactory>
 #include <future>
 #include <QEventLoop>
 
@@ -205,10 +207,33 @@ bool PipeConnection::checkChannel(const Tp::Channel &channel) const {
     return checkTargetHandle(channel.targetHandle());
 }
 
-Tp::BaseChannelPtr PipeConnection::pipeChannel(Tp::ChannelPtr channel) {
-    // TODO implement
-    // for now lets not use pipe - just return the same guy
-    return Tp::BaseChannelPtr::dynamicCast(PipeProxyChannel::create(this, channel));
+Tp::BaseChannelPtr PipeConnection::pipeChannel(Tp::ChannelPtr channel, Tp::DBusError *error) {
+
+    QDBusPendingReply<QDBusObjectPath> pipeRep = pipe->createPipeChannel(QDBusObjectPath(channel->objectPath()));
+    if(pipeRep.isValid()) {
+        // getting object paths and bus names for connection and channel
+        QString chanObjectPath = pipeRep.value().path();
+        uint lastSlash = chanObjectPath.lastIndexOf("/", 0);
+        QString conObjectPath = chanObjectPath.left(lastSlash);
+        QString conBusName = conObjectPath.right(conObjectPath.length()-1);
+        conBusName.replace("/", ".");
+        pDebug() << "PipeConnection::pipeChannel: Creating proxy channel channel for channel at: " << chanObjectPath
+            << " from connection: (" << conBusName << ", " << conObjectPath << ")";
+
+        Tp::ConnectionPtr pipedCon = Tp::Connection::create(
+                QDBusConnection::sessionBus(), 
+                conBusName, 
+                conObjectPath,
+                Tp::ChannelFactory::create(QDBusConnection::sessionBus()),
+                Tp::ContactFactory::create());
+
+        Tp::ChannelPtr pipedChannel = Tp::Channel::create(pipedCon, chanObjectPath, QVariantMap());
+
+        return Tp::BaseChannelPtr::dynamicCast(PipeProxyChannel::create(this, pipedChannel));
+    } else {
+        error->set(pipeRep.error().name(), pipeRep.error().message());
+        return Tp::BaseChannelPtr();
+    }
 }
 
 
@@ -267,7 +292,7 @@ Tp::BaseChannelPtr PipeConnection::createChannelCb(
                                 &loop, &QEventLoop::quit);
                         loop.exec();
                     }
-                    return pipeChannel(chan);
+                    return pipeChannel(chan, error);
                 }
             }
         } else {
@@ -290,7 +315,15 @@ Tp::BaseChannelPtr PipeConnection::createChannelCb(
             QDBusObjectPath objectPath = newChanRep.argumentAt<0>();
             QVariantMap props = newChanRep.argumentAt<1>();
             pDebug() << "Creating proxy for channel at: " << objectPath.path();
-            return pipeChannel(Tp::Channel::create(pipedConnection, objectPath.path(), props));
+            Tp::ChannelPtr chan = Tp::Channel::create(pipedConnection, objectPath.path(), props);
+            Tp::PendingReady *pendingReady = chan->becomeReady();
+            { // wait for channel to become ready
+                QEventLoop loop;
+                QObject::connect(pendingReady, &Tp::PendingOperation::finished,
+                        &loop, &QEventLoop::quit);
+                loop.exec();
+            }
+            return pipeChannel(chan, error);
         } else {
 
             pWarning() << "Invalid reply when creating channel: " << newChanRep.error();
